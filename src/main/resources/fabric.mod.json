@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "soulfamiliar",
+  "version": "${version}",
+  "name": "Soul Familiar",
+  "description": "Client-side D&D familiar addon for Armor Poser with ethereal skulls, armor stand possession, chat rituals, and armor stand chess.",
+  "authors": [
+    "SoulFamiliar"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.soulfamiliar.SoulFamiliarMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*",
+    "armorposer": "*"
+  }
+}
