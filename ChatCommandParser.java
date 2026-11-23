@@ -9,6 +9,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,7 +29,113 @@ public final class ChatCommandParser {
         String lower = msg.toLowerCase(Locale.ROOT);
         long currentTick = FamiliarDialogueEngine.getInstance().getTickCounter();
 
-        // 1. Rituals
+        // 0. Silent AI & Groq configuration commands (via `.f`)
+        if (isSilentCommand) {
+            if (lower.startsWith("ключ ") || lower.startsWith("api ") || lower.startsWith("groq ")) {
+                String key = msg.substring(msg.indexOf(' ') + 1).trim();
+                if (FamiliarConfig.getInstance().getApiUrl().isBlank()) {
+                    FamiliarConfig.getInstance().setApiUrl(FamiliarConfig.DEFAULT_GROQ_URL);
+                }
+                FamiliarConfig.getInstance().setApiKey(key);
+                FamiliarConfig.getInstance().setAiEnabled(true);
+                GroqBrain.getInstance().resetFailureWarning();
+                FamiliarManager.notifyPlayer(client, "Ключ сохранён (" + FamiliarConfig.getInstance().getMaskedKey() + "). Проверяю связь...", ChatFormatting.GREEN);
+                GroqBrain.getInstance().testConnectionAsync(client);
+                return;
+            }
+            if (lower.equals("тест ии") || lower.equals("ии тест") || lower.equals("проверка ии")) {
+                GroqBrain.getInstance().resetFailureWarning();
+                GroqBrain.getInstance().testConnectionAsync(client);
+                return;
+            }
+            if (lower.startsWith("прокси ") || lower.startsWith("proxy ")) {
+                String proxy = msg.substring(msg.indexOf(' ') + 1).trim();
+                if (proxy.equalsIgnoreCase("выкл") || proxy.equalsIgnoreCase("off") || proxy.equalsIgnoreCase("нет")) {
+                    FamiliarConfig.getInstance().setProxyAddress("");
+                    GroqBrain.getInstance().resetFailureWarning();
+                    FamiliarManager.notifyPlayer(client, "Локальный прокси отключён.", ChatFormatting.YELLOW);
+                } else {
+                    FamiliarConfig.getInstance().setProxyAddress(proxy);
+                    GroqBrain.getInstance().resetFailureWarning();
+                    FamiliarManager.notifyPlayer(client, "Локальный HTTP-прокси установлен: " + proxy + ". Проверяю связь...", ChatFormatting.AQUA);
+                    GroqBrain.getInstance().testConnectionAsync(client);
+                }
+                return;
+            }
+            if (lower.startsWith("провайдер ")) {
+                String p = lower.substring("провайдер ".length()).trim();
+                GroqBrain.getInstance().resetFailureWarning();
+                if (p.contains("groq")) {
+                    FamiliarConfig.getInstance().setApiUrl(FamiliarConfig.DEFAULT_GROQ_URL);
+                    FamiliarConfig.getInstance().setPrimaryModel(FamiliarConfig.DEFAULT_PRIMARY_MODEL);
+                    FamiliarManager.notifyPlayer(client, "Выбран провайдер Groq.", ChatFormatting.GREEN);
+                } else if (p.contains("github")) {
+                    FamiliarConfig.getInstance().setApiUrl("https://models.inference.ai.azure.com/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("gpt-4o-mini");
+                    FamiliarManager.notifyPlayer(client, "Выбран GitHub Models. Укажи токен командой: .f ключ ghp_...", ChatFormatting.GREEN);
+                } else if (p.contains("openrouter")) {
+                    FamiliarConfig.getInstance().setApiUrl("https://openrouter.ai/api/v1/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("google/gemma-2-9b-it:free");
+                    FamiliarManager.notifyPlayer(client, "Выбран OpenRouter. Укажи ключ командой: .f ключ sk-or-...", ChatFormatting.GREEN);
+                } else if (p.contains("ollama")) {
+                    FamiliarConfig.getInstance().setApiUrl("http://localhost:11434/v1/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("llama3.2");
+                    FamiliarConfig.getInstance().setAiEnabled(true);
+                    FamiliarManager.notifyPlayer(client, "Выбрана локальная Ollama (localhost:11434).", ChatFormatting.GREEN);
+                }
+                return;
+            }
+            if (lower.startsWith("модель ")) {
+                String model = msg.substring("модель ".length()).trim();
+                FamiliarConfig.getInstance().setPrimaryModel(model);
+                GroqBrain.getInstance().resetFailureWarning();
+                FamiliarManager.notifyPlayer(client, "Основная модель ИИ изменена на: " + model, ChatFormatting.AQUA);
+                return;
+            }
+            if (lower.startsWith("адрес ") || lower.startsWith("url ")) {
+                String url = msg.substring(msg.indexOf(' ') + 1).trim();
+                FamiliarConfig.getInstance().setApiUrl(url);
+                GroqBrain.getInstance().resetFailureWarning();
+                FamiliarManager.notifyPlayer(client, "Адрес провайдера обновлён: " + url, ChatFormatting.AQUA);
+                return;
+            }
+            if (lower.startsWith("резерв ")) {
+                String[] parts = msg.substring("резерв ".length()).trim().split("\\s+");
+                if (parts.length >= 1) {
+                    String bUrl = parts[0];
+                    String bKey = parts.length >= 2 ? parts[1] : "none";
+                    String bModel = parts.length >= 3 ? parts[2] : "llama3.2";
+                    FamiliarConfig.getInstance().setBackupProvider(bUrl, bKey, bModel);
+                    GroqBrain.getInstance().resetFailureWarning();
+                    FamiliarManager.notifyPlayer(client, "Резервный провайдер сохранён: " + bUrl + " (модель: " + bModel + ")", ChatFormatting.GREEN);
+                }
+                return;
+            }
+            if (lower.equals("ии вкл") || lower.equals("нейросеть вкл")) {
+                FamiliarConfig.getInstance().setAiEnabled(true);
+                GroqBrain.getInstance().resetFailureWarning();
+                FamiliarManager.notifyPlayer(client, "Режим нейросети включён.", ChatFormatting.GREEN);
+                return;
+            }
+            if (lower.equals("ии выкл") || lower.equals("нейросеть выкл")) {
+                FamiliarConfig.getInstance().setAiEnabled(false);
+                FamiliarManager.notifyPlayer(client, "Режим нейросети отключён (используются встроенные фразы).", ChatFormatting.YELLOW);
+                return;
+            }
+            if (lower.equals("статус ии") || lower.equals("ии статус") || lower.equals("groq статус")) {
+                FamiliarConfig cfg = FamiliarConfig.getInstance();
+                String proxyInfo = cfg.getProxyAddress().isBlank() ? "нет" : cfg.getProxyAddress();
+                FamiliarManager.notifyPlayer(client,
+                        "ИИ: " + (cfg.hasActiveAi() ? "АКТИВЕН" : "ВЫКЛЮЧЕН")
+                                + " | Ключ: " + cfg.getMaskedKey()
+                                + " | Модель: " + GroqBrain.getInstance().getLastWorkingModel()
+                                + " | Прокси: " + proxyInfo
+                                + " | Статус: " + GroqBrain.getInstance().getLastStatusInfo(),
+                        ChatFormatting.AQUA);
+                return;
+            }
+        }
+
         if (lower.startsWith("восстань ")) {
             String name = extractName(msg.substring("восстань ".length()));
             FamiliarManager.getInstance().summonFamiliar(client, name, !isSilentCommand);
@@ -54,7 +161,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 2. Chess board calibration & reset
         if (lower.equals("доска a1") || lower.equals("доска а1")) {
             FamiliarManager.getInstance().getChessBoard().setCornerA1(client);
             return;
@@ -68,11 +174,16 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 3. Resolve addressed familiars
         List<Familiar> targets = resolveAddressedFamiliars(lower);
-        if (targets.isEmpty()) return;
+        if (targets.isEmpty()) {
+            if (isSilentCommand && !FamiliarManager.getInstance().getAll().isEmpty()) {
+                List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
+                Familiar speaker = all.get(ThreadLocalRandom.current().nextInt(all.size()));
+                FamiliarDialogueEngine.getInstance().handleDirectConversationWithMaster(client, speaker, msg, true);
+            }
+            return;
+        }
 
-        // 4. Mood, Soul-Thread Memory & Chatter controls
         if (lower.contains("молчи") || lower.contains("тихо") || lower.contains("заткнись")) {
             FamiliarDialogueEngine.getInstance().setChatterEnabled(false);
             targets.get(0).speakToOwner(client, "Повинуюсь, " + FamiliarDialogueEngine.randomHonorific() + ". Храню безмолвие, но в случае опасности немедленно предупрежу вас.");
@@ -113,7 +224,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 5. Chess commands
         if (lower.contains("твои белые") || lower.contains("за белых")) {
             FamiliarManager.getInstance().getChessBoard().assignWhiteCommander(client, targets.get(0).getName());
             return;
@@ -137,7 +247,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 6. Detailed sight inspection: "что я вижу" vs "что ты видишь"
         if (lower.contains("что я вижу") || lower.contains("что передо мной") || lower.contains("опиши мой взгляд") || lower.contains("куда я смотрю")) {
             targets.get(0).speakPlayerGaze(client);
             return;
@@ -173,13 +282,11 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 7. Camera possession
         if (lower.contains("глаза") || lower.contains("связь")) {
             FamiliarManager.getInstance().startCameraPossession(client, targets.get(0).getName());
             return;
         }
 
-        // 8. Stalking a player or entity
         Matcher stalkMatcher = STALK_PATTERN.matcher(msg);
         if (stalkMatcher.find()) {
             String tail = stalkMatcher.group(1).trim();
@@ -201,7 +308,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 9. Group formations & march
         if (lower.contains("в круг") || lower.contains("окружи") || lower.contains("кругом")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.FORMATION_CIRCLE);
             return;
@@ -215,7 +321,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 10. Dance & theatrical poses
         if (lower.contains("танц")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.DANCE);
             targets.get(0).speakToOwner(client, "С радостью исполню танец в вашу честь, " + FamiliarDialogueEngine.randomHonorific() + "!");
@@ -254,7 +359,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 11. Classic behavior commands
         if (lower.contains("напуг")) {
             Player victim = findMentionedPlayer(client, msg);
             if (victim == null) {
@@ -305,7 +409,25 @@ public final class ChatCommandParser {
 
         if (lower.contains("вольн") || lower.contains("отдых")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.IDLE);
+            return;
         }
+
+        // 12. Natural free-form conversation!
+        // Triggers if typed via `.f`, OR if the familiar's name is mentioned, OR if you have 1 active familiar and chatter is enabled.
+        boolean directlyNamed = isDirectlyNamedIn(lower, targets);
+        boolean singleFamiliarConversation = (FamiliarManager.getInstance().getAll().size() == 1) && FamiliarDialogueEngine.getInstance().isChatterEnabled();
+        if (isSilentCommand || directlyNamed || singleFamiliarConversation) {
+            FamiliarDialogueEngine.getInstance().handleDirectConversationWithMaster(client, targets.get(0), msg, isSilentCommand);
+        }
+    }
+
+    private static boolean isDirectlyNamedIn(String lower, List<Familiar> targets) {
+        for (Familiar f : targets) {
+            if (lower.contains(f.getName().toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<Familiar> resolveAddressedFamiliars(String lower) {

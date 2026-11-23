@@ -14,6 +14,8 @@ public class SoulFamiliarMod implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        FamiliarConfig.getInstance().load();
+
         togglePossessViewKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.soulfamiliar.toggle_eyes",
                 InputConstants.KEY_V,

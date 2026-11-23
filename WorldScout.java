@@ -37,10 +37,61 @@ public final class WorldScout {
 
     public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
 
+    public static String buildCompactAiWorldSummary(ClientLevel level, LocalPlayer owner, Familiar speaker, long currentTick) {
+        if (level == null || owner == null) return "Неизвестная местность.";
+        List<String> facts = new ArrayList<>();
+
+        String dimName = "Верхний мир";
+        if (level.dimension() == Level.NETHER) dimName = "Нижний мир (Незер)";
+        else if (level.dimension() == Level.END) dimName = "Край (Энд)";
+
+        BlockPos bp = owner.blockPosition();
+        facts.add("Измерение: " + dimName + ", высота Y=" + bp.getY());
+        facts.add("Здоровье Повелителя: " + (int) Math.ceil(owner.getHealth()) + "/" + (int) Math.ceil(owner.getMaxHealth()));
+        if (level.isThundering()) facts.add("Погода: гроза");
+        else if (level.isRaining()) facts.add("Погода: дождь");
+
+        if (!owner.getMainHandItem().isEmpty()) {
+            facts.add("В руке Повелителя: " + owner.getMainHandItem().getHoverName().getString());
+        }
+
+        List<String> nearPlayers = new ArrayList<>();
+        for (Player p : level.players()) {
+            if (p != owner && p.isAlive() && p.distanceToSqr(owner) <= 900.0) {
+                int dist = (int) Math.round(p.distanceTo(owner));
+                nearPlayers.add(p.getName().getString() + " (" + dist + " бл.)");
+            }
+        }
+        if (!nearPlayers.isEmpty()) {
+            facts.add("Игроки рядом: " + String.join(", ", nearPlayers));
+        }
+
+        List<Entity> mobs = level.getEntities(owner, owner.getBoundingBox().inflate(16.0), e ->
+                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
+        );
+        if (!mobs.isEmpty()) {
+            mobs.sort(Comparator.comparingDouble(e -> e.distanceToSqr(owner)));
+            Entity nearest = mobs.get(0);
+            facts.add("Ближайшее существо: " + nearest.getName().getString() + " (" + (int) Math.round(nearest.distanceTo(owner)) + " бл.)");
+        }
+
+        List<HiveMemory.MemoryEntry> recent = HiveMemory.getInstance().getRecentEntries(currentTick, 3);
+        if (!recent.isEmpty()) {
+            List<String> memNotes = new ArrayList<>();
+            for (HiveMemory.MemoryEntry e : recent) {
+                int dist = (int) Math.round(owner.getEyePosition().distanceTo(e.pos()));
+                memNotes.add(e.label() + " (" + dist + " бл. " + relativeDirection(owner, e.pos()) + ")");
+            }
+            facts.add("Недавние находки духов: " + String.join(", ", memNotes));
+        }
+
+        facts.add("Облик духа " + speaker.getName() + ": " + (speaker.isBound() ? "вселён в стойку для брони" : "парящий череп"));
+        return String.join("; ", facts) + ".";
+    }
+
     public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
         if (level == null || owner == null) return null;
 
-        // 1. Immediate threats near owner (within 10 blocks)
         List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
                 e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
         );
@@ -61,7 +112,6 @@ public final class WorldScout {
             }
         }
 
-        // 2. Scan radius around the roaming familiar (10 blocks) for genuinely high-value loot/ores
         BlockPos center = BlockPos.containing(origin);
         int r = 10;
         for (int dx = -r; dx <= r; dx++) {
@@ -97,14 +147,12 @@ public final class WorldScout {
 
         List<String> sections = new ArrayList<>();
 
-        // Direct gaze raycast from the familiar
         Vec3 lookVec = directionFromYawPitch(yaw, pitch);
         String directSight = inspectRay(level, owner, eyeOrigin, lookVec, 18.0);
         if (directSight != null) {
             sections.add("Прямо перед моим взором — " + directSight);
         }
 
-        // Nearby players within 22 blocks
         List<Player> players = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 484.0) {
@@ -125,7 +173,6 @@ public final class WorldScout {
             sections.add("Игроки поблизости: " + String.join(", ", pDetails));
         }
 
-        // Nearby creatures/mobs within 18 blocks
         List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(18.0), e ->
                 e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
         );
@@ -145,7 +192,6 @@ public final class WorldScout {
             }
         }
 
-        // Notable blocks & ores within 13 blocks (and record them into shared soul memory)
         Map<String, Integer> blockCounts = new LinkedHashMap<>();
         BlockPos center = BlockPos.containing(eyeOrigin);
         int r = 13;
@@ -251,14 +297,12 @@ public final class WorldScout {
         String q = rawQuery.toLowerCase(Locale.ROOT).replace("?", "").replace("!", "").trim();
         if (q.isEmpty()) return null;
 
-        // 1. Check shared soul memory first
         HiveMemory.MemoryEntry mem = HiveMemory.getInstance().searchMemory(q, owner.position(), currentTick);
         if (mem != null) {
             double dist = owner.getEyePosition().distanceTo(mem.pos());
             return new SearchResult(mem.label(), mem.pos(), dist, relativeDirection(owner, mem.pos()), mem.discoveredBy());
         }
 
-        // 2. Search players within 45 blocks
         Player bestPlayer = null;
         double bestPlayerDist = 45.0 * 45.0;
         for (Player p : level.players()) {
@@ -277,7 +321,6 @@ public final class WorldScout {
             return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()), null);
         }
 
-        // 3. Search entities/mobs within 36 blocks
         String entityHint = mapRussianEntityHint(q);
         Entity bestEntity = null;
         double bestEntityDist = 36.0 * 36.0;
@@ -301,7 +344,6 @@ public final class WorldScout {
             return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()), null);
         }
 
-        // 4. Search blocks within 28 blocks around the familiar
         BlockPos center = BlockPos.containing(searchOrigin);
         BlockPos bestBlockPos = null;
         String bestBlockLabel = null;

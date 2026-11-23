@@ -36,14 +36,12 @@ public class Familiar {
     private final PoseState currentPose = new PoseState();
     private boolean initializedFlags = false;
 
-    // Autonomous roaming for ethereal skull (slow, eerie drift up to 22 blocks)
     private boolean roamEnabled = true;
     private Vec3 roamGoal = null;
     private int roamPauseTicks = 0;
     private Vec3 inspectFocusPos = null;
     private int inspectTicksLeft = 0;
 
-    // Action state
     private int actionTimer = 0;
     private Vec3 pointTarget = null;
     private UUID scareTargetUuid = null;
@@ -562,7 +560,6 @@ public class Familiar {
         Vec3 targetPos = shoulderPos;
         float targetYaw = player.getYRot() + Mth.sin((tickCount + index * 7) * 0.045f) * 14.0f;
         float targetPitch = player.getXRot() * 0.5f + Mth.cos(tickCount * 0.07f) * 6.0f;
-        // Much slower, unhurried ghostly drift
         double moveLerp = 0.065;
 
         Vec3 hiveFocus = HiveMemory.getInstance().getSharedFocusPos(tickCount);
