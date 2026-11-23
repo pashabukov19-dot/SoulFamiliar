@@ -100,7 +100,7 @@ public final class WorldScout {
 
         List<String> sections = new ArrayList<>();
 
-        // 1. Atmosphere / time / dimension
+        // 1. Atmosphere / weather / dimension
         sections.add(describeEnvironment(level, eyeOrigin));
 
         // 2. Direct gaze raycast from the familiar
@@ -260,18 +260,10 @@ public final class WorldScout {
         if (level.dimension() == Level.END) {
             return "Вокруг бездна и сумрак Края";
         }
-        long timeOfDay = level.getDayTime() % 24000L;
-        String timeStr;
-        if (timeOfDay < 1000) timeStr = "раннее утро";
-        else if (timeOfDay < 11500) timeStr = "ясный день";
-        else if (timeOfDay < 13500) timeStr = "закат";
-        else if (timeOfDay < 22500) timeStr = "глубокая ночь";
-        else timeStr = "рассвет";
-
         String weatherStr = level.isThundering() ? ", гремит гроза" : (level.isRaining() ? ", идёт дождь" : "");
         BlockPos bp = BlockPos.containing(pos);
         String depthStr = (!level.canSeeSky(bp) && bp.getY() < 55) ? ", подземелье (высота Y=" + bp.getY() + ")" : "";
-        return "Сейчас " + timeStr + weatherStr + depthStr;
+        return "Мы находимся в Верхнем мире" + weatherStr + depthStr;
     }
 
     public static SearchResult locateTarget(ClientLevel level, LocalPlayer owner, Vec3 searchOrigin, String rawQuery, long currentTick) {
