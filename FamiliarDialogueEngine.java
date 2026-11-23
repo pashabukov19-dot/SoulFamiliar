@@ -306,7 +306,6 @@ public final class FamiliarDialogueEngine {
 
         if (fromOwner) {
             if (isCommandLike(lower)) return;
-            // Avoid double-answering if ChatCommandParser already triggered a direct reply on this tick
             if ((tickCounter - lastDirectReplyTick) <= 5) return;
         }
 
@@ -330,9 +329,8 @@ public final class FamiliarDialogueEngine {
                 || lower.contains("умер") || lower.contains("погиб") || lower.contains("взорвал") || lower.contains("упал") || lower.contains("сгорел"));
 
         if (!wasDirectlyNamed && !isDeath) {
-            long minCooldown = fromOwner ? 120L : 300L; // 6s for owner's public chat, 15s for other players
+            long minCooldown = fromOwner ? 120L : 300L;
             if ((tickCounter - lastChatReactionTick) < minCooldown) return;
-            // When AI is active, react much more reliably (65% on general chat, 100% on owner's chat)
             double chance = FamiliarConfig.getInstance().hasActiveAi() ? (fromOwner ? 1.0 : 0.65) : 0.25;
             if (rng.nextDouble() > chance) return;
         }

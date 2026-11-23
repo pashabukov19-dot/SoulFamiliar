@@ -29,7 +29,6 @@ public final class ChatCommandParser {
         String lower = msg.toLowerCase(Locale.ROOT);
         long currentTick = FamiliarDialogueEngine.getInstance().getTickCounter();
 
-        // 0. Silent AI & Groq configuration commands (via `.f`)
         if (isSilentCommand) {
             if (lower.startsWith("ключ ") || lower.startsWith("api ") || lower.startsWith("groq ")) {
                 String key = msg.substring(msg.indexOf(' ') + 1).trim();
@@ -72,7 +71,7 @@ public final class ChatCommandParser {
                 } else if (p.contains("github")) {
                     FamiliarConfig.getInstance().setApiUrl("https://models.inference.ai.azure.com/chat/completions");
                     FamiliarConfig.getInstance().setPrimaryModel("gpt-4o-mini");
-                    FamiliarManager.notifyPlayer(client, "Выбран GitHub Models. Укажи токен командой: .f ключ ghp_...", ChatFormatting.GREEN);
+                    FamiliarManager.notifyPlayer(client, "Выбран GitHub Models. Укажи токен командой: .f ключ github_pat_...", ChatFormatting.GREEN);
                 } else if (p.contains("openrouter")) {
                     FamiliarConfig.getInstance().setApiUrl("https://openrouter.ai/api/v1/chat/completions");
                     FamiliarConfig.getInstance().setPrimaryModel("google/gemma-2-9b-it:free");
@@ -412,8 +411,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 12. Natural free-form conversation!
-        // Triggers if typed via `.f`, OR if the familiar's name is mentioned, OR if you have 1 active familiar and chatter is enabled.
         boolean directlyNamed = isDirectlyNamedIn(lower, targets);
         boolean singleFamiliarConversation = (FamiliarManager.getInstance().getAll().size() == 1) && FamiliarDialogueEngine.getInstance().isChatterEnabled();
         if (isSilentCommand || directlyNamed || singleFamiliarConversation) {

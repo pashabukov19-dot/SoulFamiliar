@@ -16,8 +16,8 @@ public final class FamiliarConfig {
     private static final FamiliarConfig INSTANCE = new FamiliarConfig();
 
     public static final String DEFAULT_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    public static final String DEFAULT_PRIMARY_MODEL = "llama-3.3-70b-versatile";
-    public static final String DEFAULT_FALLBACK_MODELS = "meta-llama/llama-4-scout-17b-16e-instruct,openai/gpt-oss-120b,llama-3.1-8b-instant";
+    public static final String DEFAULT_PRIMARY_MODEL = "openai/gpt-oss-120b";
+    public static final String DEFAULT_FALLBACK_MODELS = "openai/gpt-oss-20b,qwen/qwen3.8-27b";
 
     private String apiUrl = DEFAULT_GROQ_URL;
     private String apiKey = "";
@@ -52,13 +52,19 @@ public final class FamiliarConfig {
             props.load(in);
             this.apiUrl = props.getProperty("api_url", DEFAULT_GROQ_URL).trim();
             this.apiKey = props.getProperty("api_key", "").trim();
-            this.primaryModel = props.getProperty("primary_model", DEFAULT_PRIMARY_MODEL).trim();
+            String loadedPrimary = props.getProperty("primary_model", DEFAULT_PRIMARY_MODEL).trim();
+            // Auto-migrate retired 2026 free-tier Llama IDs to active Groq free models
+            if (loadedPrimary.equals("llama-3.3-70b-versatile") || loadedPrimary.equals("llama-3.1-8b-instant")) {
+                loadedPrimary = DEFAULT_PRIMARY_MODEL;
+            }
+            this.primaryModel = loadedPrimary;
             this.fallbackModels = props.getProperty("fallback_models", DEFAULT_FALLBACK_MODELS).trim();
             this.proxyAddress = props.getProperty("proxy_address", "").trim();
             this.backupApiUrl = props.getProperty("backup_api_url", "").trim();
             this.backupApiKey = props.getProperty("backup_api_key", "").trim();
             this.backupModel = props.getProperty("backup_model", "").trim();
             this.aiEnabled = Boolean.parseBoolean(props.getProperty("ai_enabled", "true"));
+            save();
         } catch (IOException ignored) {
         }
     }

@@ -64,7 +64,7 @@ public final class GroqBrain {
             return cachedClient;
         }
         HttpClient.Builder builder = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(7));
+                .connectTimeout(Duration.ofSeconds(6));
 
         if (proxySpec != null && !proxySpec.isBlank() && !proxySpec.equalsIgnoreCase("off") && !proxySpec.equalsIgnoreCase("выкл")) {
             String[] parts = proxySpec.split(":");
@@ -179,13 +179,11 @@ public final class GroqBrain {
                 latestError = outcome.errorReason;
                 if (outcome.statusCode == 429) sawRateLimit = true;
                 if (outcome.statusCode == 400 || outcome.statusCode == 404) sawModelError = true;
-                if (outcome.statusCode == 401 || outcome.statusCode == 403) {
-                    // Auth or geo-block error won't be fixed by trying another model on the same endpoint
+                if (outcome.statusCode == 401 || outcome.statusCode == 403 || outcome.statusCode == -1) {
                     break;
                 }
             }
 
-            // If configured model names were deprecated/not found, auto-discover live models from /models!
             if (sawModelError) {
                 List<String> discovered = discoverAvailableModels(httpClient, cfg.getApiUrl(), cfg.getApiKey());
                 for (String liveModel : discovered) {
@@ -245,10 +243,10 @@ public final class GroqBrain {
 
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(10))
+                    .timeout(Duration.ofSeconds(8))
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5")
+                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5.3")
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(root)));
 
             if (apiKey != null && !apiKey.isBlank() && !apiKey.equalsIgnoreCase("none")) {
@@ -304,9 +302,9 @@ public final class GroqBrain {
             String modelsUrl = chatUrl.replace("/chat/completions", "/models");
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(modelsUrl))
-                    .timeout(Duration.ofSeconds(7))
+                    .timeout(Duration.ofSeconds(6))
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5")
+                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5.3")
                     .GET();
             if (apiKey != null && !apiKey.isBlank() && !apiKey.equalsIgnoreCase("none")) {
                 reqBuilder.header("Authorization", "Bearer " + apiKey);
