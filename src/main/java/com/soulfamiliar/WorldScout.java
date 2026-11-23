@@ -37,9 +37,6 @@ public final class WorldScout {
 
     public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
 
-    /**
-     * Compact situation summary passed to Groq AI so the familiar understands the world around the Master.
-     */
     public static String buildCompactAiWorldSummary(ClientLevel level, LocalPlayer owner, Familiar speaker, long currentTick) {
         if (level == null || owner == null) return "Неизвестная местность.";
         List<String> facts = new ArrayList<>();
@@ -58,7 +55,6 @@ public final class WorldScout {
             facts.add("В руке Повелителя: " + owner.getMainHandItem().getHoverName().getString());
         }
 
-        // Nearby players
         List<String> nearPlayers = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.distanceToSqr(owner) <= 900.0) {
@@ -70,7 +66,6 @@ public final class WorldScout {
             facts.add("Игроки рядом: " + String.join(", ", nearPlayers));
         }
 
-        // Nearest entity
         List<Entity> mobs = level.getEntities(owner, owner.getBoundingBox().inflate(16.0), e ->
                 e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
         );
@@ -80,7 +75,6 @@ public final class WorldScout {
             facts.add("Ближайшее существо: " + nearest.getName().getString() + " (" + (int) Math.round(nearest.distanceTo(owner)) + " бл.)");
         }
 
-        // Recent discoveries in soul memory
         List<HiveMemory.MemoryEntry> recent = HiveMemory.getInstance().getRecentEntries(currentTick, 3);
         if (!recent.isEmpty()) {
             List<String> memNotes = new ArrayList<>();
@@ -98,7 +92,6 @@ public final class WorldScout {
     public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
         if (level == null || owner == null) return null;
 
-        // 1. Immediate threats near owner (within 10 blocks)
         List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
                 e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
         );
@@ -119,7 +112,6 @@ public final class WorldScout {
             }
         }
 
-        // 2. Scan radius around the roaming familiar (10 blocks) for genuinely high-value loot/ores
         BlockPos center = BlockPos.containing(origin);
         int r = 10;
         for (int dx = -r; dx <= r; dx++) {

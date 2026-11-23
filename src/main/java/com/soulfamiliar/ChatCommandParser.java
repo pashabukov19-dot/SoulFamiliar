@@ -29,7 +29,6 @@ public final class ChatCommandParser {
         String lower = msg.toLowerCase(Locale.ROOT);
         long currentTick = FamiliarDialogueEngine.getInstance().getTickCounter();
 
-        // 0. Silent AI & Groq configuration commands (only allowed via `.f` so keys are never leaked to server chat!)
         if (isSilentCommand) {
             if (lower.startsWith("ключ ") || lower.startsWith("api ") || lower.startsWith("groq ")) {
                 String key = msg.substring(msg.indexOf(' ') + 1).trim();
@@ -84,7 +83,6 @@ public final class ChatCommandParser {
             }
         }
 
-        // 1. Rituals
         if (lower.startsWith("восстань ")) {
             String name = extractName(msg.substring("восстань ".length()));
             FamiliarManager.getInstance().summonFamiliar(client, name, !isSilentCommand);
@@ -110,7 +108,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 2. Chess board calibration & reset
         if (lower.equals("доска a1") || lower.equals("доска а1")) {
             FamiliarManager.getInstance().getChessBoard().setCornerA1(client);
             return;
@@ -124,10 +121,8 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 3. Resolve addressed familiars
         List<Familiar> targets = resolveAddressedFamiliars(lower);
         if (targets.isEmpty()) {
-            // If silent `.f <anything>` was typed without naming a specific familiar, pick any active familiar!
             if (isSilentCommand && !FamiliarManager.getInstance().getAll().isEmpty()) {
                 List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
                 Familiar speaker = all.get(ThreadLocalRandom.current().nextInt(all.size()));
@@ -136,7 +131,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 4. Mood, Soul-Thread Memory & Chatter controls
         if (lower.contains("молчи") || lower.contains("тихо") || lower.contains("заткнись")) {
             FamiliarDialogueEngine.getInstance().setChatterEnabled(false);
             targets.get(0).speakToOwner(client, "Повинуюсь, " + FamiliarDialogueEngine.randomHonorific() + ". Храню безмолвие, но в случае опасности немедленно предупрежу вас.");
@@ -177,7 +171,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 5. Chess commands
         if (lower.contains("твои белые") || lower.contains("за белых")) {
             FamiliarManager.getInstance().getChessBoard().assignWhiteCommander(client, targets.get(0).getName());
             return;
@@ -201,7 +194,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 6. Detailed sight inspection: "что я вижу" vs "что ты видишь"
         if (lower.contains("что я вижу") || lower.contains("что передо мной") || lower.contains("опиши мой взгляд") || lower.contains("куда я смотрю")) {
             targets.get(0).speakPlayerGaze(client);
             return;
@@ -237,13 +229,11 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 7. Camera possession
         if (lower.contains("глаза") || lower.contains("связь")) {
             FamiliarManager.getInstance().startCameraPossession(client, targets.get(0).getName());
             return;
         }
 
-        // 8. Stalking a player or entity
         Matcher stalkMatcher = STALK_PATTERN.matcher(msg);
         if (stalkMatcher.find()) {
             String tail = stalkMatcher.group(1).trim();
@@ -265,7 +255,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 9. Group formations & march
         if (lower.contains("в круг") || lower.contains("окружи") || lower.contains("кругом")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.FORMATION_CIRCLE);
             return;
@@ -279,7 +268,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 10. Dance & theatrical poses
         if (lower.contains("танц")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.DANCE);
             targets.get(0).speakToOwner(client, "С радостью исполню танец в вашу честь, " + FamiliarDialogueEngine.randomHonorific() + "!");
@@ -318,7 +306,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 11. Classic behavior commands
         if (lower.contains("напуг")) {
             Player victim = findMentionedPlayer(client, msg);
             if (victim == null) {
@@ -372,7 +359,6 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 12. Free-form natural conversation with the familiar!
         if (isSilentCommand || isDirectlyNamedIn(lower, targets)) {
             FamiliarDialogueEngine.getInstance().handleDirectConversationWithMaster(client, targets.get(0), msg, isSilentCommand);
         }

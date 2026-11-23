@@ -36,7 +36,6 @@ public final class FamiliarDialogueEngine {
     private final Deque<String> recentLines = new ArrayDeque<>();
     private final Deque<String> chatHistory = new ArrayDeque<>();
 
-    // Delayed second-familiar echo state
     private String pendingSpeakerName = null;
     private String pendingSpeech = null;
     private int pendingDelayTicks = 0;
@@ -121,7 +120,6 @@ public final class FamiliarDialogueEngine {
         List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
         if (all.isEmpty()) return;
 
-        // 1. Delayed echo reply from a second familiar
         if (pendingSpeech != null && --pendingDelayTicks <= 0) {
             Familiar f = FamiliarManager.getInstance().getByName(pendingSpeakerName);
             if (f != null) {
@@ -132,20 +130,15 @@ public final class FamiliarDialogueEngine {
             pendingSpeakerName = null;
         }
 
-        // 2. Proactive discovery scan every 5 seconds (100 ticks), only reports genuine discoveries
         if (tickCounter % 100 == 0 && (tickCounter - lastInitiativeTick) >= 280) {
             runInitiativeScan(client, all);
         }
 
-        // 3. Situational observations every ~90 seconds — ONLY when there is a real environmental condition!
         if (chatterEnabled && tickCounter % 120 == 0 && (tickCounter - lastAmbientTick) >= 1800) {
             speakSituationalObservation(client, all);
         }
     }
 
-    /**
-     * Handles free-form conversation from the Master (either via silent `.f` or direct mention in chat).
-     */
     public void handleDirectConversationWithMaster(Minecraft client, Familiar speaker, String masterMessage, boolean isPrivateWhisper) {
         if (client.level == null || client.player == null || speaker == null) return;
 
@@ -167,7 +160,6 @@ public final class FamiliarDialogueEngine {
                     speaker.speakToOwner(client, reply.text());
                     recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
 
-                    // 30% chance a second familiar adds a brief follow-up comment in character
                     if (all.size() >= 2 && ThreadLocalRandom.current().nextDouble() < 0.30) {
                         Familiar other = pickOtherFamiliar(all, speaker);
                         if (other != null) {
@@ -176,7 +168,6 @@ public final class FamiliarDialogueEngine {
                     }
                 },
                 () -> {
-                    // Local fallback if offline or API key not set
                     String fallback = generateRespectfulMoodQuip(
                             speaker.getMood(), masterMessage.toLowerCase(Locale.ROOT),
                             true, true, client.player.getName().getString().toLowerCase(Locale.ROOT), true, false
@@ -291,52 +282,49 @@ public final class FamiliarDialogueEngine {
             if (rawText.startsWith("[" + f.getName() + "]")) return;
         }
 
-        // Always record incoming server chat into the context buffer so familiars understand the full thread!
         recordChatLine(rawText);
 
         boolean fromOwner = isPlayerChat && (lower.startsWith("<" + ownerNick + ">") || lower.contains(ownerNick + ":") || lower.contains(ownerNick + " »"));
         if (fromOwner && isCommandLike(lower)) return;
 
-        Familiar mentioned = null;
+        Familiar foundMentioned = null;
         for (Familiar f : all) {
             if (lower.contains(f.getName().toLowerCase(Locale.ROOT))) {
-                mentioned = f;
+                foundMentioned = f;
                 break;
             }
         }
+        final Familiar mentioned = foundMentioned;
+        final boolean wasDirectlyNamed = (mentioned != null);
 
-        if (!chatterEnabled && mentioned == null) return;
+        if (!chatterEnabled && !wasDirectlyNamed) return;
 
         ThreadLocalRandom rng = ThreadLocalRandom.current();
-        Familiar speaker = mentioned != null ? mentioned : all.get(rng.nextInt(all.size()));
+        final Familiar speaker = wasDirectlyNamed ? mentioned : all.get(rng.nextInt(all.size()));
 
-        boolean isDeath = !isPlayerChat && (lower.contains("slain") || lower.contains("blew up") || lower.contains("fell")
+        final boolean isDeath = !isPlayerChat && (lower.contains("slain") || lower.contains("blew up") || lower.contains("fell")
                 || lower.contains("drowned") || lower.contains("burned") || lower.contains("tried to swim in lava")
                 || lower.contains("умер") || lower.contains("погиб") || lower.contains("взорвал") || lower.contains("упал") || lower.contains("сгорел"));
 
-        // Decide whether to react to general chat
-        boolean isImportantTopic = isDeath || mentioned != null
+        boolean isImportantTopic = isDeath || wasDirectlyNamed
                 || lower.contains("алмаз") || lower.contains("крипер") || lower.contains("помоги")
                 || lower.contains("убивают") || lower.contains("торг") || lower.contains("продам")
                 || lower.contains("куплю") || lower.contains(ownerNick);
 
-        if (mentioned == null && !isDeath) {
-            // Cooldown 22 seconds (440 ticks) for general chat reactions
+        if (!wasDirectlyNamed && !isDeath) {
             if ((tickCounter - lastChatReactionTick) < 440) return;
-            // If it's just random casual chatter not mentioning owner or hot topics, react only 30% of the time
             if (!isImportantTopic && rng.nextDouble() > 0.30) return;
         }
 
         lastChatReactionTick = tickCounter;
 
-        // If Groq AI is configured, generate a true context-aware reply reading the chat history!
         if (FamiliarConfig.getInstance().hasActiveAi()) {
             String worldCtx = WorldScout.buildCompactAiWorldSummary(client.level, client.player, speaker, tickCounter);
             String transcript = getChatTranscript();
             String task;
             if (isDeath) {
                 task = "В чате появилось сообщение о смерти: «" + rawText + "». Если погиб сам Повелитель — искренне посочувствуй и пообещай сторожить место. Если погиб другой игрок — язвительно прокомментируй хрупкость смертных для Повелителя.";
-            } else if (mentioned != null) {
+            } else if (wasDirectlyNamed) {
                 task = "В чате упомянули твоё имя («" + rawText + "»). Ответь с учётом контекста переписки и обстановки, обращаясь к Повелителю.";
             } else if (fromOwner) {
                 task = "Повелитель написал в общий чат другим игрокам: «" + rawText + "». Дай ему краткий, остроумный или полезный комментарий шёпотом, учитывая, с кем и о чём он переписывается в чате.";
@@ -353,7 +341,7 @@ public final class FamiliarDialogueEngine {
                         recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
                     },
                     () -> {
-                        String fallback = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, mentioned != null, isDeath);
+                        String fallback = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, wasDirectlyNamed, isDeath);
                         if (fallback != null) {
                             speaker.speakToOwner(client, fallback);
                             recordChatLine("[Дух " + speaker.getName() + "]: " + fallback);
@@ -363,8 +351,7 @@ public final class FamiliarDialogueEngine {
             return;
         }
 
-        // Offline / No-key fallback
-        String quip = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, mentioned != null, isDeath);
+        String quip = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, wasDirectlyNamed, isDeath);
         if (quip == null) return;
 
         speaker.speakToOwner(client, quip);

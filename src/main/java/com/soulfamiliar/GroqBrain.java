@@ -45,10 +45,6 @@ public final class GroqBrain {
 
     public record AiReply(String text, String gestureTag) {}
 
-    /**
-     * Asynchronously queries Groq (with automatic model cascade fallback + backup provider fallback).
-     * Calls onSuccess on the Minecraft client thread, or onFallback if all AI endpoints fail.
-     */
     public void askFamiliarAsync(
             Minecraft client,
             Familiar speaker,
@@ -71,7 +67,6 @@ public final class GroqBrain {
         }
 
         if (!requestInFlight.compareAndSet(false, true)) {
-            // Another request is already running; skip duplicate spam or use local fallback
             return;
         }
 
@@ -98,7 +93,6 @@ public final class GroqBrain {
     }
 
     private String executeWithCascade(FamiliarConfig cfg, String systemPrompt, String userPrompt) {
-        // 1. Try primary endpoint (Groq) across all configured models in cascade
         if (!cfg.getApiUrl().isBlank() && (!cfg.getApiKey().isBlank() || isLocalEndpoint(cfg.getApiUrl()))) {
             List<String> models = cfg.getModelCascade();
             for (String model : models) {
@@ -109,16 +103,14 @@ public final class GroqBrain {
                         return answer;
                     }
                 } catch (RateLimitException rle) {
-                    // Try next model in Groq cascade (each model has its own rate limit bucket!)
+                    // Try next model in Groq cascade
                 } catch (Exception ignored) {
                     // Try next model
                 }
             }
-            // All Groq models temporarily rate-limited -> brief 20s cooldown
             this.rateLimitedUntilMs = System.currentTimeMillis() + 20_000L;
         }
 
-        // 2. Try backup OpenAI-compatible provider (e.g., Ollama / OpenRouter / GitHub Models)
         if (!cfg.getBackupApiUrl().isBlank()) {
             String backupModel = cfg.getBackupModel().isBlank() ? "llama3.2" : cfg.getBackupModel();
             try {
@@ -184,7 +176,6 @@ public final class GroqBrain {
         if (contentEl == null || contentEl.isJsonNull()) return null;
 
         String raw = contentEl.getAsString().trim();
-        // Strip <think>...</think> blocks if a reasoning model (like Qwen3) outputs them
         raw = raw.replaceAll("(?s)<think>.*?</think>", "").trim();
         return raw;
     }
@@ -240,7 +231,6 @@ public final class GroqBrain {
             }
         }
 
-        // Remove accidental wrapping quotes
         if ((text.startsWith("«") && text.endsWith("»")) || (text.startsWith("\"") && text.endsWith("\""))) {
             text = text.substring(1, text.length() - 1).trim();
         }
