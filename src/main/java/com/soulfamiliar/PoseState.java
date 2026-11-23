@@ -139,7 +139,6 @@ public class PoseState {
             p.leftLegX = -swing * 0.85f;
             p.rightLegX = swing * 0.85f;
         } else {
-            // Attention stance
             p.leftArmZ = -3.0f;
             p.rightArmZ = 3.0f;
         }
@@ -302,7 +301,6 @@ public class PoseState {
 
         switch (phase) {
             case 0 -> {
-                // Disco point
                 p.bodyYaw = baseYaw + beat * 16.0f;
                 p.headX = -8.0f + fastBeat * 8.0f;
                 p.headZ = beat * 12.0f;
@@ -316,7 +314,6 @@ public class PoseState {
                 p.rightLegX = -beat * 18.0f;
             }
             case 1 -> {
-                // Arm wave groove
                 p.bodyYaw = baseYaw + beat * 22.0f;
                 p.headY = -beat * 25.0f;
                 p.bodyZ = beat * 10.0f;
@@ -328,7 +325,6 @@ public class PoseState {
                 p.rightLegZ = 10.0f;
             }
             case 2 -> {
-                // Spin!
                 p.bodyYaw = (baseYaw + (time * 14.0f)) % 360.0f;
                 p.headX = -6.0f;
                 p.leftArmX = -85.0f;
@@ -339,7 +335,6 @@ public class PoseState {
                 p.rightLegX = -14.0f;
             }
             default -> {
-                // Kick dance
                 p.bodyYaw = baseYaw;
                 p.headX = fastBeat * 10.0f;
                 p.bodyX = 10.0f;

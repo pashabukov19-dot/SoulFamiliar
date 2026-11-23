@@ -5,8 +5,10 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -25,12 +27,70 @@ public final class WorldScout {
 
     public record SearchResult(String label, Vec3 pos, double distance, String direction) {}
 
+    public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
+
+    public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
+        if (level == null || owner == null) return null;
+
+        // 1. Check immediate danger sneaking behind or near owner (within 8 blocks)
+        List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(8.5), e ->
+                e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
+        );
+        for (Entity e : threats) {
+            if (e instanceof Creeper) {
+                return new Discovery("entity:" + e.getUUID(), "крипер", e.getEyePosition(), true);
+            }
+            if (e instanceof EnderMan) {
+                return new Discovery("entity:" + e.getUUID(), "эндермен", e.getEyePosition(), true);
+            }
+            if (e instanceof Player p) {
+                // Sneaking player or someone approaching closely
+                if (p.isShiftKeyDown() || p.distanceToSqr(owner) < 25.0) {
+                    return new Discovery("player:" + p.getUUID(), "игрок " + p.getName().getString(), p.getEyePosition(), p.isShiftKeyDown());
+                }
+            }
+            if (e instanceof Enemy && e.distanceToSqr(owner) < 36.0) {
+                return new Discovery("entity:" + e.getUUID(), e.getName().getString(), e.getEyePosition(), true);
+            }
+        }
+
+        // 2. Scan around the familiar's current position (radius 6) for high-value loot/ores
+        BlockPos center = BlockPos.containing(origin);
+        int r = 6;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    BlockPos bp = center.offset(dx, dy, dz);
+                    String highValue = classifyHighValueDiscovery(level.getBlockState(bp));
+                    if (highValue != null) {
+                        // Group nearby ore veins into a 4x4x4 sector key so it doesn't spam per block
+                        String sectorKey = highValue + ":" + (bp.getX() >> 2) + ":" + (bp.getY() >> 2) + ":" + (bp.getZ() >> 2);
+                        return new Discovery(sectorKey, highValue, Vec3.atCenterOf(bp), false);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static String classifyHighValueDiscovery(BlockState state) {
+        if (state.is(Blocks.DIAMOND_ORE) || state.is(Blocks.DEEPSLATE_DIAMOND_ORE)) return "алмазная руда";
+        if (state.is(Blocks.ANCIENT_DEBRIS)) return "древние обломки";
+        if (state.is(Blocks.EMERALD_ORE) || state.is(Blocks.DEEPSLATE_EMERALD_ORE)) return "изумрудная руда";
+        if (state.is(Blocks.SPAWNER)) return "спавнер";
+        if (state.is(Blocks.NETHER_PORTAL) || state.is(Blocks.END_PORTAL) || state.is(Blocks.END_PORTAL_FRAME)) return "портал";
+        if (state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST) || state.is(Blocks.BARREL) || state.is(Blocks.ENDER_CHEST)) return "сундук";
+        if (state.is(Blocks.ENCHANTING_TABLE)) return "стол зачарований";
+        if (state.is(Blocks.BEACON)) return "маяк";
+        return null;
+    }
+
     public static String describeSurroundings(ClientLevel level, LocalPlayer owner, Vec3 eyeOrigin) {
         if (level == null || owner == null) return "Вокруг пустота.";
 
         List<String> parts = new ArrayList<>();
 
-        // 1. Players
         List<Player> players = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 196.0) {
@@ -49,7 +109,6 @@ public final class WorldScout {
             }
         }
 
-        // 2. Mobs / entities
         List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(14.0), e ->
                 e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
         );
@@ -65,7 +124,6 @@ public final class WorldScout {
             }
         }
 
-        // 3. Notable blocks within 10 blocks
         Map<String, Integer> blockCounts = new LinkedHashMap<>();
         BlockPos center = BlockPos.containing(eyeOrigin);
         int r = 9;
@@ -92,9 +150,9 @@ public final class WorldScout {
         }
 
         if (parts.isEmpty()) {
-            return "Я осмотрелся вокруг — здесь тихо, никого и ничего примечательного поблизости нет.";
+            return "Тишина и уныние: ни сундуков, ни алмазов, ни даже приличного зомби поблизости.";
         }
-        return "Я вижу: " + String.join("; ", parts) + ".";
+        return "Докладываю: " + String.join("; ", parts) + ".";
     }
 
     public static SearchResult locateTarget(ClientLevel level, LocalPlayer owner, Vec3 searchOrigin, String rawQuery) {
@@ -102,7 +160,6 @@ public final class WorldScout {
         String q = rawQuery.toLowerCase(Locale.ROOT).replace("?", "").replace("!", "").trim();
         if (q.isEmpty()) return null;
 
-        // 1. Search players first
         Player bestPlayer = null;
         double bestPlayerDist = 32.0 * 32.0;
         for (Player p : level.players()) {
@@ -121,7 +178,6 @@ public final class WorldScout {
             return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()));
         }
 
-        // 2. Search entities/mobs
         String entityHint = mapRussianEntityHint(q);
         Entity bestEntity = null;
         double bestEntityDist = 26.0 * 26.0;
@@ -145,7 +201,6 @@ public final class WorldScout {
             return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()));
         }
 
-        // 3. Search notable blocks within 20 blocks
         BlockPos center = BlockPos.containing(searchOrigin);
         BlockPos bestBlockPos = null;
         String bestBlockLabel = null;
@@ -214,8 +269,7 @@ public final class WorldScout {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
         if (level == null || owner == null) return currentPos;
 
-        // 45% chance to fly over and inspect a nearby entity or interesting block
-        if (rng.nextDouble() < 0.45) {
+        if (rng.nextDouble() < 0.5) {
             List<Entity> nearby = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
                     e.isAlive() && e != owner && !(e instanceof ArmorStand)
             );
@@ -225,7 +279,7 @@ public final class WorldScout {
             }
 
             BlockPos base = owner.blockPosition();
-            for (int attempt = 0; attempt < 24; attempt++) {
+            for (int attempt = 0; attempt < 28; attempt++) {
                 BlockPos sample = base.offset(rng.nextInt(-9, 10), rng.nextInt(-3, 5), rng.nextInt(-9, 10));
                 if (classifyNotableBlock(level.getBlockState(sample)) != null) {
                     return Vec3.atCenterOf(sample).add(0, 1.15, 0);
@@ -233,7 +287,6 @@ public final class WorldScout {
             }
         }
 
-        // Otherwise pick a random air point within 9 blocks of the owner
         for (int attempt = 0; attempt < 12; attempt++) {
             double angle = rng.nextDouble() * Math.PI * 2.0;
             double radius = 2.2 + rng.nextDouble() * 7.2;

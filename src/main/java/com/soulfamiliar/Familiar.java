@@ -1,6 +1,5 @@
 package com.soulfamiliar;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -79,6 +78,11 @@ public class Familiar {
         this.roamGoal = null;
         this.inspectFocusPos = null;
         this.inspectTicksLeft = 0;
+    }
+
+    public void focusOnLocation(Vec3 pos, int ticks) {
+        this.inspectFocusPos = pos.add(0, 0.85, 0);
+        this.inspectTicksLeft = ticks;
     }
 
     public void setSkullOverridePos(Vec3 pos) {
@@ -201,18 +205,17 @@ public class Familiar {
         Vec3 origin = getCurrentWorldPosition(client.level, client.player);
         WorldScout.SearchResult res = WorldScout.locateTarget(client.level, client.player, origin, query);
         if (res == null) {
-            speakToOwner(client, "Я осмотрел окрестности вокруг нас, но «" + query + "» поблизости не нашёл.");
+            speakToOwner(client, "Я всё облетел, но «" + query + "» поблизости нет. Попробуй поискать сам, у тебя же две ноги.");
             triggerShakeHead();
             return;
         }
         int dist = (int) Math.round(res.distance());
-        speakToOwner(client, "Нашёл! Это " + res.label() + " — примерно " + dist + " бл. " + res.direction() + ".");
+        speakToOwner(client, "Нашёл! Это " + res.label() + " — примерно " + dist + " бл. " + res.direction() + ". Не благодари.");
 
         if (isBound()) {
             triggerPoint(res.pos());
         } else {
-            this.inspectFocusPos = res.pos().add(0, 1.0, 0);
-            this.inspectTicksLeft = 110;
+            focusOnLocation(res.pos(), 110);
         }
     }
 
@@ -374,7 +377,6 @@ public class Familiar {
                     moveDelta = diff.scale(0.35);
                     desired = PoseState.sprint(yawBetween(standPos, slot), tickCount);
                 } else {
-                    // Face outward to guard the owner
                     float outwardYaw = yawBetween(player.position(), standPos);
                     desired = PoseState.guard(outwardYaw, 0.0f, 0.0f, tickCount);
                 }
@@ -418,7 +420,6 @@ public class Familiar {
                 Vec3 diff = goal.subtract(standPos);
                 float yawToTarget = yawBetween(standPos, target.position());
 
-                // Weeping-angel behavior: freeze if target looks right at the armor stand!
                 boolean targetWatching = (target instanceof Player p) && isPlayerLookingNear(p, standPos.add(0, 1.5, 0), 0.78);
                 if (targetWatching) {
                     desired = PoseState.guard(yawToTarget, 0.0f, 0.0f, 0.0f);
@@ -495,7 +496,6 @@ public class Familiar {
     private void tickEtherealSkull(ClientLevel level, LocalPlayer player, int index, int totalEthereal, int groupIndex, int groupTotal, long tickCount) {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
 
-        // Shoulder anchor position as fallback
         float sideSign = (index % 2 == 0) ? 1.0f : -1.0f;
         int tier = index / 2;
         float angleDeg = player.getYRot() + sideSign * (58.0f + tier * 24.0f);
@@ -523,7 +523,6 @@ public class Familiar {
             targetPitch = 15.0f;
         } else if (inspectTicksLeft > 0 && inspectFocusPos != null) {
             inspectTicksLeft--;
-            // Fly near the located target if within 15 blocks of owner, otherwise hover near owner pointing at it
             if (inspectFocusPos.distanceToSqr(player.position()) <= 225.0) {
                 targetPos = inspectFocusPos.add(0, 0.55 + Math.sin(tickCount * 0.15) * 0.12, 0);
             } else {
@@ -572,7 +571,6 @@ public class Familiar {
             targetPos = player.position().add(back.scale(1.6 + (groupIndex / 2) * 1.1)).add(right.scale(side)).add(0, 1.7 + Math.abs(Math.sin(tickCount * 0.4)) * 0.15, 0);
             targetYaw = player.getYRot();
         } else if (roamEnabled && mode != FamiliarMode.FOLLOW) {
-            // Autonomous exploration within 10 blocks of the owner!
             double distFromOwner = currentSkullPos.distanceTo(player.position());
             if (distFromOwner > 11.5 || roamGoal == null || roamGoal.distanceTo(player.position()) > 11.0) {
                 roamGoal = WorldScout.pickInterestingRoamTarget(level, player, currentSkullPos);
@@ -588,7 +586,6 @@ public class Familiar {
                 if (roamPauseTicks <= 0) {
                     roamGoal = WorldScout.pickInterestingRoamTarget(level, player, currentSkullPos);
                 }
-                // Hover and look around curiously
                 targetPos = roamGoal.add(0, Math.sin((tickCount + index * 13) * 0.12) * 0.14, 0);
                 targetYaw = yawBetween(currentSkullPos, roamGoal) + Mth.sin(tickCount * 0.07f) * 45.0f;
                 targetPitch = 14.0f + Mth.cos(tickCount * 0.09f) * 10.0f;
@@ -601,7 +598,6 @@ public class Familiar {
             }
         }
 
-        // Apply temporary head reactions on top
         if (mode == FamiliarMode.BOW) {
             targetPitch = 42.0f;
             if (--actionTimer <= 0) mode = FamiliarMode.IDLE;

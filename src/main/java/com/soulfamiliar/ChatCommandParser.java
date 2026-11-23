@@ -71,7 +71,23 @@ public final class ChatCommandParser {
         List<Familiar> targets = resolveAddressedFamiliars(lower);
         if (targets.isEmpty()) return;
 
-        // 4. Chess commands
+        // 4. Chatter toggle & jokes
+        if (lower.contains("молчи") || lower.contains("тихо") || lower.contains("заткнись")) {
+            FamiliarDialogueEngine.getInstance().setChatterEnabled(false);
+            targets.get(0).speakToOwner(client, "Молчу-молчу. Буду страдать в тишине.");
+            return;
+        }
+        if (lower.contains("болтай") || lower.contains("говори") || lower.contains("разговаривай")) {
+            FamiliarDialogueEngine.getInstance().setChatterEnabled(true);
+            targets.get(0).speakToOwner(client, "О, ты разрешил мне комментировать происходящее? Сам напросился.");
+            return;
+        }
+        if (lower.contains("шутк") || lower.contains("пошути") || lower.contains("скажи что-нибудь")) {
+            FamiliarDialogueEngine.getInstance().speakImmediateJoke(client, targets.get(0));
+            return;
+        }
+
+        // 5. Chess commands
         if (lower.contains("твои белые") || lower.contains("за белых")) {
             FamiliarManager.getInstance().getChessBoard().assignWhiteCommander(client, targets.get(0).getName());
             return;
@@ -95,7 +111,7 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 5. Dialogue & Scouting ("что ты видишь", "где ...", "погуляй", "на плечо")
+        // 6. Dialogue & Scouting ("что ты видишь", "где ...", "погуляй", "на плечо")
         if (lower.contains("что ты видишь") || lower.contains("что видишь") || lower.contains("осмотрись") || lower.contains("что вокруг") || lower.contains("доложи")) {
             targets.get(0).speakSurroundings(client);
             return;
@@ -113,7 +129,7 @@ public final class ChatCommandParser {
                 f.setRoamEnabled(false);
                 f.setMode(FamiliarMode.IDLE);
             }
-            targets.get(0).speakToOwner(client, "Возвращаюсь к твоему плечу.");
+            targets.get(0).speakToOwner(client, "Возвращаюсь на пост у твоего плеча.");
             return;
         }
 
@@ -122,17 +138,17 @@ public final class ChatCommandParser {
                 f.setRoamEnabled(true);
                 f.setMode(FamiliarMode.IDLE);
             }
-            targets.get(0).speakToOwner(client, "Осмотрю окрестности неподалёку.");
+            targets.get(0).speakToOwner(client, "Полечу осмотрюсь. Постарайся не вляпаться ни во что, пока меня нет.");
             return;
         }
 
-        // 6. Camera possession
+        // 7. Camera possession
         if (lower.contains("глаза") || lower.contains("связь")) {
             FamiliarManager.getInstance().startCameraPossession(client, targets.get(0).getName());
             return;
         }
 
-        // 7. Stalking a player or entity
+        // 8. Stalking a player or entity
         Matcher stalkMatcher = STALK_PATTERN.matcher(msg);
         if (stalkMatcher.find()) {
             String tail = stalkMatcher.group(1).trim();
@@ -150,11 +166,11 @@ public final class ChatCommandParser {
             for (Familiar f : targets) {
                 f.triggerStalk(targetEntity);
             }
-            targets.get(0).speakToOwner(client, "Начинаю слежку за «" + targetEntity.getName().getString() + "».");
+            targets.get(0).speakToOwner(client, "Перехожу в режим тени. «" + targetEntity.getName().getString() + "» даже не поймёт, что за ним следят.");
             return;
         }
 
-        // 8. Group formations & march
+        // 9. Group formations & march
         if (lower.contains("в круг") || lower.contains("окружи") || lower.contains("кругом")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.FORMATION_CIRCLE);
             return;
@@ -168,9 +184,10 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 9. Dance & theatrical poses
+        // 10. Dance & theatrical poses
         if (lower.contains("танц")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.DANCE);
+            targets.get(0).speakToOwner(client, "И ради этого я пересекал границу между мирами? Ладно, смотри!");
             return;
         }
         if (lower.contains("колен")) {
@@ -206,7 +223,7 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 10. Classic behavior commands
+        // 11. Classic behavior commands
         if (lower.contains("напуг")) {
             Player victim = findMentionedPlayer(client, msg);
             if (victim == null) {
@@ -219,6 +236,7 @@ public final class ChatCommandParser {
             for (Familiar f : targets) {
                 f.triggerScare(victim, f.resolveBoundStand(client.level));
             }
+            targets.get(0).speakToOwner(client, "С удовольствием. Сейчас у «" + victim.getName().getString() + "» прибавится седых волос.");
             return;
         }
 

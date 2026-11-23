@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.KeyMapping;
 
@@ -24,6 +25,7 @@ public class SoulFamiliarMod implements ClientModInitializer {
                 FamiliarManager.getInstance().toggleNextPossessionView(client);
             }
             FamiliarManager.getInstance().tick(client);
+            FamiliarDialogueEngine.getInstance().tick(client);
         });
 
         ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
@@ -35,6 +37,16 @@ public class SoulFamiliarMod implements ClientModInitializer {
             }
             ChatCommandParser.handleMessage(trimmed, false);
             return true;
+        });
+
+        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
+            FamiliarDialogueEngine.getInstance().onIncomingChat(message.getString(), true);
+        });
+
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            if (!overlay) {
+                FamiliarDialogueEngine.getInstance().onIncomingChat(message.getString(), false);
+            }
         });
     }
 }

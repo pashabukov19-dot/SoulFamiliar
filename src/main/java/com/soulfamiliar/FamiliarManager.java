@@ -81,7 +81,7 @@ public class FamiliarManager {
                 client.player.getX(), client.player.getY(), client.player.getZ(),
                 SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.0f, 0.75f, false
         );
-        notifyPlayer(client, "Дух «" + cleanName + "» откликнулся на зов и отправился осматривать окрестности.", ChatFormatting.AQUA);
+        familiar.speakToOwner(client, "Снова в мир смертных? Ладно, посмотрим, что тут у тебя интересного.");
     }
 
     public void possessTargetStand(Minecraft client, String name) {
@@ -97,7 +97,7 @@ public class FamiliarManager {
             return;
         }
         f.bindToStand(client, target);
-        notifyPlayer(client, "«" + f.getName() + "» вселился в стойку для брони.", ChatFormatting.AQUA);
+        f.speakToOwner(client, "Деревянное тело... Зато теперь я могу драматично размахивать руками.");
     }
 
     public void releaseFamiliar(Minecraft client, String name) {
@@ -107,7 +107,7 @@ public class FamiliarManager {
             stopCameraPossession(client);
         }
         f.releaseStand(client);
-        notifyPlayer(client, "«" + f.getName() + "» покинул стойку и вернулся в бесплотный облик.", ChatFormatting.AQUA);
+        f.speakToOwner(client, "Наконец-то снова невесомость. Никакой гравитации и скрипа досок.");
     }
 
     public void dismissFamiliar(Minecraft client, String name) {
