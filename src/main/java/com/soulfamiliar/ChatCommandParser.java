@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class ChatCommandParser {
-    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\b([a-hA-H][1-8])\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\s*([a-hA-H][1-8])\b");
+    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\\b([a-hA-H][1-8])\\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\\s*([a-hA-H][1-8])\\b");
 
     private ChatCommandParser() {}
 
@@ -198,6 +198,8 @@ public final class ChatCommandParser {
     }
 
     private static String extractName(String tail) {
-        return tail.replaceAll("[^\p{L}\p{N}_-]", " ").trim().split("\s+")[0];
+        String cleaned = tail.replaceAll("[^\\p{L}\\p{N}_-]", " ").trim();
+        if (cleaned.isEmpty()) return "";
+        return cleaned.split("\\s+")[0];
     }
 }
