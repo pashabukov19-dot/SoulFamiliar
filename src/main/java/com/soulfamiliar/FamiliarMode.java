@@ -8,5 +8,18 @@ public enum FamiliarMode {
     SCARE,
     FOLLOW,
     FROZEN,
-    POSSESSED
+    POSSESSED,
+    KNEEL,
+    MEDITATE,
+    APPLAUD,
+    THREATEN,
+    THINK,
+    DRAMA,
+    NOD,
+    SHAKE_HEAD,
+    DANCE,
+    FORMATION_CIRCLE,
+    FORMATION_LINE,
+    MARCH,
+    STALK
 }

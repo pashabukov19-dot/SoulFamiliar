@@ -81,7 +81,7 @@ public class FamiliarManager {
                 client.player.getX(), client.player.getY(), client.player.getZ(),
                 SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.0f, 0.75f, false
         );
-        notifyPlayer(client, "Дух «" + cleanName + "» откликнулся на зов и парит у твоего плеча.", ChatFormatting.AQUA);
+        notifyPlayer(client, "Дух «" + cleanName + "» откликнулся на зов и отправился осматривать окрестности.", ChatFormatting.AQUA);
     }
 
     public void possessTargetStand(Minecraft client, String name) {
@@ -107,7 +107,7 @@ public class FamiliarManager {
             stopCameraPossession(client);
         }
         f.releaseStand(client);
-        notifyPlayer(client, "«" + f.getName() + "» покинул стойку и вернулся к твоему плечу.", ChatFormatting.AQUA);
+        notifyPlayer(client, "«" + f.getName() + "» покинул стойку и вернулся в бесплотный облик.", ChatFormatting.AQUA);
     }
 
     public void dismissFamiliar(Minecraft client, String name) {
@@ -185,7 +185,6 @@ public class FamiliarManager {
             return;
         }
 
-        // Validate camera possession state
         if (possessingFamiliarKey != null) {
             Familiar active = familiars.get(possessingFamiliarKey);
             ArmorStand stand = active != null ? active.resolveBoundStand(client.level) : null;
@@ -196,7 +195,6 @@ public class FamiliarManager {
             }
         }
 
-        // Tick chess animations first (uses packet budget when moving a piece)
         boolean chessUsedPacket = chessBoard.tick(client, tickCounter);
 
         List<Familiar> list = new ArrayList<>(familiars.values());
@@ -207,7 +205,6 @@ public class FamiliarManager {
             if (f.resolveBoundStand(client.level) == null) totalEthereal++;
         }
 
-        // Rate-limit ArmorPoser packets to max 1 packet every 2 ticks (10 pkt/s total)
         boolean packetWindow = !chessUsedPacket && (tickCounter % 2 == 0);
         int chosenForPacket = -1;
         if (packetWindow) {
@@ -216,12 +213,13 @@ public class FamiliarManager {
         }
 
         int etherealIdx = 0;
-        for (int i = 0; i < list.size(); i++) {
+        int groupTotal = list.size();
+        for (int i = 0; i < groupTotal; i++) {
             Familiar f = list.get(i);
             boolean isEthereal = f.resolveBoundStand(client.level) == null;
             int idxForSlot = isEthereal ? etherealIdx++ : 0;
             boolean allowSend = packetWindow && (i == chosenForPacket);
-            f.tick(client, idxForSlot, totalEthereal, tickCounter, allowSend);
+            f.tick(client, idxForSlot, totalEthereal, i, groupTotal, tickCounter, allowSend);
         }
     }
 
@@ -272,6 +270,20 @@ public class FamiliarManager {
         return hit != null && hit.getEntity() instanceof Player p ? p : null;
     }
 
+    public static Entity raycastAnyEntity(Minecraft client, double range) {
+        if (client.player == null || client.level == null) return null;
+        Vec3 eye = client.player.getEyePosition();
+        Vec3 look = client.player.getLookAngle();
+        Vec3 end = eye.add(look.scale(range));
+        AABB box = client.player.getBoundingBox().expandTowards(look.scale(range)).inflate(1.0);
+        EntityHitResult hit = ProjectileUtil.getEntityHitResult(
+                client.player, eye, end, box,
+                e -> e != client.player && e.isAlive() && !(e instanceof ArmorStand),
+                range * range
+        );
+        return hit != null ? hit.getEntity() : null;
+    }
+
     public static Vec3 raycastLookPoint(Minecraft client, double range) {
         if (client.player == null || client.level == null) return Vec3.ZERO;
         Vec3 eye = client.player.getEyePosition();
@@ -301,6 +313,15 @@ public class FamiliarManager {
             client.player.sendSystemMessage(
                     Component.literal("[Фамильяр] ").withStyle(ChatFormatting.DARK_AQUA)
                             .append(Component.literal(text).withStyle(color))
+            );
+        }
+    }
+
+    public static void notifyDialogue(Minecraft client, String familiarName, String speech) {
+        if (client.player != null) {
+            client.player.sendSystemMessage(
+                    Component.literal("[" + familiarName + "] ").withStyle(ChatFormatting.AQUA)
+                            .append(Component.literal("«" + speech + "»").withStyle(ChatFormatting.WHITE))
             );
         }
     }

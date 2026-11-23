@@ -2,6 +2,7 @@ package com.soulfamiliar;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -12,7 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class ChatCommandParser {
-    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\\b([a-hA-H][1-8])\\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\\s*([a-hA-H][1-8])\\b");
+    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\b([a-hA-H][1-8])\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\s*([a-hA-H][1-8])\b");
+    private static final Pattern LOCATE_PATTERN = Pattern.compile("(?:где|найди|поищи|отыщи)\s+(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern STALK_PATTERN = Pattern.compile("(?:преследуй|следи за|выследи)\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private ChatCommandParser() {}
 
@@ -24,7 +27,7 @@ public final class ChatCommandParser {
         if (msg.isEmpty()) return;
         String lower = msg.toLowerCase(Locale.ROOT);
 
-        // 1. Rituals: "Восстань [Имя]", "Вселись [Имя]", "Вернись [Имя]", "Упокойся [Имя]"
+        // 1. Rituals
         if (lower.startsWith("восстань ")) {
             String name = extractName(msg.substring("восстань ".length()));
             FamiliarManager.getInstance().summonFamiliar(client, name, !isSilentCommand);
@@ -64,46 +67,148 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 3. Determine addressed familiars (specific name or "все" / single familiar)
+        // 3. Resolve addressed familiars
         List<Familiar> targets = resolveAddressedFamiliars(lower);
         if (targets.isEmpty()) return;
 
-        // 4. Chess side assignment & moves
+        // 4. Chess commands
         if (lower.contains("твои белые") || lower.contains("за белых")) {
-            Familiar commander = targets.get(0);
-            FamiliarManager.getInstance().getChessBoard().assignWhiteCommander(client, commander.getName());
+            FamiliarManager.getInstance().getChessBoard().assignWhiteCommander(client, targets.get(0).getName());
             return;
         }
         if (lower.contains("твои чёрные") || lower.contains("твои черные") || lower.contains("за чёрных") || lower.contains("за черных")) {
-            Familiar commander = targets.get(0);
-            FamiliarManager.getInstance().getChessBoard().assignBlackCommander(client, commander.getName());
+            FamiliarManager.getInstance().getChessBoard().assignBlackCommander(client, targets.get(0).getName());
             return;
         }
         if (lower.contains("рокировк")) {
-            Familiar commander = targets.get(0);
             boolean queenSide = lower.contains("длинн");
-            FamiliarManager.getInstance().getChessBoard().castle(client, commander, queenSide);
+            FamiliarManager.getInstance().getChessBoard().castle(client, targets.get(0), queenSide);
             return;
         }
 
         Matcher chessMatcher = CHESS_MOVE_PATTERN.matcher(msg);
         if (chessMatcher.find()) {
-            Familiar commander = targets.get(0);
             String fromSq = chessMatcher.group(1).toUpperCase(Locale.ROOT);
             String toSq = chessMatcher.group(2).toUpperCase(Locale.ROOT);
             boolean isCapture = lower.contains("бьёт") || lower.contains("бьет") || lower.contains("рубит");
-            FamiliarManager.getInstance().getChessBoard().orderMove(client, commander, fromSq, toSq, isCapture);
+            FamiliarManager.getInstance().getChessBoard().orderMove(client, targets.get(0), fromSq, toSq, isCapture);
             return;
         }
 
-        // 5. Familiar behavior commands
+        // 5. Dialogue & Scouting ("что ты видишь", "где ...", "погуляй", "на плечо")
+        if (lower.contains("что ты видишь") || lower.contains("что видишь") || lower.contains("осмотрись") || lower.contains("что вокруг") || lower.contains("доложи")) {
+            targets.get(0).speakSurroundings(client);
+            return;
+        }
+
+        Matcher locateMatcher = LOCATE_PATTERN.matcher(msg);
+        if (locateMatcher.find()) {
+            String targetQuery = locateMatcher.group(1).trim();
+            targets.get(0).locateAndReport(client, targetQuery);
+            return;
+        }
+
+        if (lower.contains("на плечо") || lower.contains("к плечу")) {
+            for (Familiar f : targets) {
+                f.setRoamEnabled(false);
+                f.setMode(FamiliarMode.IDLE);
+            }
+            targets.get(0).speakToOwner(client, "Возвращаюсь к твоему плечу.");
+            return;
+        }
+
+        if (lower.contains("погуляй") || lower.contains("изучай") || lower.contains("исследуй") || lower.contains("свободно")) {
+            for (Familiar f : targets) {
+                f.setRoamEnabled(true);
+                f.setMode(FamiliarMode.IDLE);
+            }
+            targets.get(0).speakToOwner(client, "Осмотрю окрестности неподалёку.");
+            return;
+        }
+
+        // 6. Camera possession
         if (lower.contains("глаза") || lower.contains("связь")) {
             FamiliarManager.getInstance().startCameraPossession(client, targets.get(0).getName());
             return;
         }
 
+        // 7. Stalking a player or entity
+        Matcher stalkMatcher = STALK_PATTERN.matcher(msg);
+        if (stalkMatcher.find()) {
+            String tail = stalkMatcher.group(1).trim();
+            Entity targetEntity = null;
+            if (!tail.isEmpty()) {
+                targetEntity = WorldScout.findEntityForStalk(client.level, client.player, tail);
+            }
+            if (targetEntity == null) {
+                targetEntity = FamiliarManager.raycastAnyEntity(client, 18.0);
+            }
+            if (targetEntity == null) {
+                FamiliarManager.notifyPlayer(client, "Укажи имя/тип цели или посмотри на существо перед командой «преследуй».", ChatFormatting.YELLOW);
+                return;
+            }
+            for (Familiar f : targets) {
+                f.triggerStalk(targetEntity);
+            }
+            targets.get(0).speakToOwner(client, "Начинаю слежку за «" + targetEntity.getName().getString() + "».");
+            return;
+        }
+
+        // 8. Group formations & march
+        if (lower.contains("в круг") || lower.contains("окружи") || lower.contains("кругом")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.FORMATION_CIRCLE);
+            return;
+        }
+        if (lower.contains("в шеренгу") || lower.contains("в строй") || lower.contains("линия")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.FORMATION_LINE);
+            return;
+        }
+        if (lower.contains("марш")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.MARCH);
+            return;
+        }
+
+        // 9. Dance & theatrical poses
+        if (lower.contains("танц")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.DANCE);
+            return;
+        }
+        if (lower.contains("колен")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.KNEEL);
+            return;
+        }
+        if (lower.contains("медитац") || lower.contains("лотос")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.MEDITATE);
+            return;
+        }
+        if (lower.contains("аплодис") || lower.contains("хлопай") || lower.contains("браво")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.APPLAUD);
+            return;
+        }
+        if (lower.contains("угроз") || lower.contains("в атаку") || lower.contains("замах")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.THREATEN);
+            return;
+        }
+        if (lower.contains("думай") || lower.contains("раздум") || lower.contains("задумай")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.THINK);
+            return;
+        }
+        if (lower.contains("драм") || lower.contains("отчаян") || lower.contains("ужас")) {
+            for (Familiar f : targets) f.setMode(FamiliarMode.DRAMA);
+            return;
+        }
+        if (lower.contains("кивн") || lower.equals("да") || lower.endsWith(", да") || lower.endsWith(" да")) {
+            for (Familiar f : targets) f.triggerNod();
+            return;
+        }
+        if (lower.contains("покачай головой") || lower.equals("нет") || lower.endsWith(", нет") || lower.endsWith(" нет")) {
+            for (Familiar f : targets) f.triggerShakeHead();
+            return;
+        }
+
+        // 10. Classic behavior commands
         if (lower.contains("напуг")) {
-            Player victim = findMentionedPlayer(client, msg, targets);
+            Player victim = findMentionedPlayer(client, msg);
             if (victim == null) {
                 victim = FamiliarManager.raycastPlayer(client, 12.0);
             }
@@ -135,30 +240,22 @@ public final class ChatCommandParser {
         }
 
         if (lower.contains("сторож") || lower.contains("охран")) {
-            for (Familiar f : targets) {
-                f.setMode(FamiliarMode.GUARD);
-            }
+            for (Familiar f : targets) f.setMode(FamiliarMode.GUARD);
             return;
         }
 
         if (lower.contains("ко мне") || lower.contains("за мной")) {
-            for (Familiar f : targets) {
-                f.setMode(FamiliarMode.FOLLOW);
-            }
+            for (Familiar f : targets) f.setMode(FamiliarMode.FOLLOW);
             return;
         }
 
         if (lower.contains("замр") || lower.contains("стату")) {
-            for (Familiar f : targets) {
-                f.setMode(FamiliarMode.FROZEN);
-            }
+            for (Familiar f : targets) f.setMode(FamiliarMode.FROZEN);
             return;
         }
 
         if (lower.contains("вольн") || lower.contains("отдых")) {
-            for (Familiar f : targets) {
-                f.setMode(FamiliarMode.IDLE);
-            }
+            for (Familiar f : targets) f.setMode(FamiliarMode.IDLE);
         }
     }
 
@@ -177,14 +274,13 @@ public final class ChatCommandParser {
             return matched;
         }
 
-        // If user has only 1 familiar, allow omitting its name
         if (FamiliarManager.getInstance().getAll().size() == 1) {
             matched.addAll(FamiliarManager.getInstance().getAll());
         }
         return matched;
     }
 
-    private static Player findMentionedPlayer(Minecraft client, String msg, List<Familiar> excludedFamiliars) {
+    private static Player findMentionedPlayer(Minecraft client, String msg) {
         if (client.level == null) return null;
         String lower = msg.toLowerCase(Locale.ROOT);
         for (Player p : client.level.players()) {
@@ -198,8 +294,8 @@ public final class ChatCommandParser {
     }
 
     private static String extractName(String tail) {
-        String cleaned = tail.replaceAll("[^\\p{L}\\p{N}_-]", " ").trim();
+        String cleaned = tail.replaceAll("[^\p{L}\p{N}_-]", " ").trim();
         if (cleaned.isEmpty()) return "";
-        return cleaned.split("\\s+")[0];
+        return cleaned.split("\s+")[0];
     }
 }

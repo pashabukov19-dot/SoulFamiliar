@@ -29,7 +29,6 @@ public class ChessBoardManager {
     private int capturedWhiteCount = 0;
     private int capturedBlackCount = 0;
 
-    // Active animation state
     private UUID movingStandUuid = null;
     private Vec3 moveDestination = null;
     private float moveYaw = 0.0f;
@@ -121,7 +120,6 @@ public class ChessBoardManager {
         if (toCoords == null) return;
         Vec3 dest = getSquareCenter(toCoords[0], toCoords[1]);
 
-        // Handle capture if destination square is occupied
         UUID victimUuid = squareToStand.get(toSq);
         if (victimUuid != null && !victimUuid.equals(pieceUuid)) {
             ArmorStand victim = findStandByUuid(client.level, victimUuid);

@@ -127,6 +127,25 @@ public class PoseState {
         return p;
     }
 
+    public static PoseState march(float yaw, float time, boolean moving) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        p.headX = -4.0f;
+        p.bodyX = 2.0f;
+        if (moving) {
+            float swing = Mth.sin(time * 0.65f) * 62.0f;
+            p.leftArmX = swing;
+            p.rightArmX = -swing;
+            p.leftLegX = -swing * 0.85f;
+            p.rightLegX = swing * 0.85f;
+        } else {
+            // Attention stance
+            p.leftArmZ = -3.0f;
+            p.rightArmZ = 3.0f;
+        }
+        return p;
+    }
+
     public static PoseState jumpscare(float yaw) {
         PoseState p = new PoseState();
         p.bodyYaw = yaw;
@@ -154,6 +173,184 @@ public class PoseState {
         p.rightArmZ = 45.0f;
         p.leftLegX = 80.0f;
         p.rightLegX = 84.0f;
+        return p;
+    }
+
+    public static PoseState kneel(float yaw) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        p.headX = 26.0f;
+        p.bodyX = 18.0f;
+        p.rightArmX = -52.0f;
+        p.rightArmY = -36.0f;
+        p.rightArmZ = 8.0f;
+        p.leftArmX = -24.0f;
+        p.leftArmZ = -10.0f;
+        p.leftLegX = -75.0f;
+        p.rightLegX = 65.0f;
+        return p;
+    }
+
+    public static PoseState meditate(float yaw, float time) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        float sway = Mth.sin(time * 0.08f) * 2.0f;
+        p.headX = 8.0f + sway;
+        p.bodyX = -2.0f;
+        p.leftArmX = -38.0f;
+        p.leftArmY = 25.0f;
+        p.leftArmZ = -28.0f;
+        p.rightArmX = -38.0f;
+        p.rightArmY = -25.0f;
+        p.rightArmZ = 28.0f;
+        p.leftLegX = -78.0f;
+        p.leftLegY = -38.0f;
+        p.leftLegZ = -15.0f;
+        p.rightLegX = -78.0f;
+        p.rightLegY = 38.0f;
+        p.rightLegZ = 15.0f;
+        return p;
+    }
+
+    public static PoseState applaud(float yaw, float time) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        float clap = Math.abs(Mth.sin(time * 0.55f));
+        p.headX = -4.0f + clap * 4.0f;
+        p.bodyX = 2.0f;
+        p.leftArmX = -68.0f;
+        p.leftArmY = 28.0f - clap * 18.0f;
+        p.leftArmZ = -10.0f;
+        p.rightArmX = -68.0f;
+        p.rightArmY = -28.0f + clap * 18.0f;
+        p.rightArmZ = 10.0f;
+        return p;
+    }
+
+    public static PoseState threaten(float yaw, float time) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        float pulse = Mth.sin(time * 0.25f) * 4.0f;
+        p.headX = -8.0f;
+        p.headZ = -6.0f;
+        p.bodyX = 8.0f;
+        p.bodyY = -12.0f;
+        p.rightArmX = -155.0f + pulse;
+        p.rightArmY = -18.0f;
+        p.rightArmZ = 16.0f;
+        p.leftArmX = -48.0f;
+        p.leftArmY = 32.0f;
+        p.leftArmZ = -18.0f;
+        p.leftLegX = -16.0f;
+        p.rightLegX = 18.0f;
+        return p;
+    }
+
+    public static PoseState think(float yaw, float time) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        p.headX = 14.0f;
+        p.headY = Mth.sin(time * 0.05f) * 10.0f;
+        p.headZ = 12.0f;
+        p.bodyX = 3.0f;
+        p.leftArmX = -45.0f;
+        p.leftArmY = 48.0f;
+        p.leftArmZ = -10.0f;
+        p.rightArmX = -112.0f;
+        p.rightArmY = -32.0f;
+        p.rightArmZ = 12.0f;
+        return p;
+    }
+
+    public static PoseState drama(float yaw, float time) {
+        PoseState p = new PoseState();
+        p.bodyYaw = yaw;
+        float shake = Mth.sin(time * 0.4f) * 5.0f;
+        p.headX = 22.0f;
+        p.headZ = shake;
+        p.bodyX = -12.0f;
+        p.leftArmX = -126.0f;
+        p.leftArmY = 26.0f;
+        p.leftArmZ = -8.0f;
+        p.rightArmX = -126.0f;
+        p.rightArmY = -26.0f;
+        p.rightArmZ = 8.0f;
+        p.leftLegX = -10.0f;
+        p.rightLegX = 12.0f;
+        return p;
+    }
+
+    public static PoseState nod(float yaw, float time) {
+        PoseState p = idle(yaw, time);
+        p.headX = Mth.sin(time * 0.65f) * 26.0f;
+        p.headY = 0.0f;
+        return p;
+    }
+
+    public static PoseState shakeHead(float yaw, float time) {
+        PoseState p = idle(yaw, time);
+        p.headX = 4.0f;
+        p.headY = Mth.sin(time * 0.65f) * 34.0f;
+        return p;
+    }
+
+    public static PoseState dance(float baseYaw, float time) {
+        PoseState p = new PoseState();
+        int phase = ((int) (time / 28.0f)) % 4;
+        float beat = Mth.sin(time * 0.55f);
+        float fastBeat = Mth.sin(time * 1.1f);
+
+        switch (phase) {
+            case 0 -> {
+                // Disco point
+                p.bodyYaw = baseYaw + beat * 16.0f;
+                p.headX = -8.0f + fastBeat * 8.0f;
+                p.headZ = beat * 12.0f;
+                p.bodyX = -4.0f + fastBeat * 4.0f;
+                p.rightArmX = -148.0f + fastBeat * 14.0f;
+                p.rightArmZ = 22.0f;
+                p.leftArmX = -25.0f;
+                p.leftArmY = 40.0f;
+                p.leftArmZ = -28.0f;
+                p.leftLegX = beat * 18.0f;
+                p.rightLegX = -beat * 18.0f;
+            }
+            case 1 -> {
+                // Arm wave groove
+                p.bodyYaw = baseYaw + beat * 22.0f;
+                p.headY = -beat * 25.0f;
+                p.bodyZ = beat * 10.0f;
+                p.leftArmX = -90.0f + Mth.sin(time * 0.55f) * 45.0f;
+                p.leftArmZ = -35.0f;
+                p.rightArmX = -90.0f + Mth.sin(time * 0.55f + 1.5f) * 45.0f;
+                p.rightArmZ = 35.0f;
+                p.leftLegZ = -10.0f;
+                p.rightLegZ = 10.0f;
+            }
+            case 2 -> {
+                // Spin!
+                p.bodyYaw = (baseYaw + (time * 14.0f)) % 360.0f;
+                p.headX = -6.0f;
+                p.leftArmX = -85.0f;
+                p.leftArmZ = -42.0f;
+                p.rightArmX = -85.0f;
+                p.rightArmZ = 42.0f;
+                p.leftLegX = 14.0f;
+                p.rightLegX = -14.0f;
+            }
+            default -> {
+                // Kick dance
+                p.bodyYaw = baseYaw;
+                p.headX = fastBeat * 10.0f;
+                p.bodyX = 10.0f;
+                p.leftArmX = -55.0f;
+                p.leftArmY = 35.0f;
+                p.rightArmX = -55.0f;
+                p.rightArmY = -35.0f;
+                p.leftLegX = Math.max(0.0f, beat) * -75.0f;
+                p.rightLegX = Math.max(0.0f, -beat) * -75.0f;
+            }
+        }
         return p;
     }
 }
