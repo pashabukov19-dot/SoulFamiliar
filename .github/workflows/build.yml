@@ -9,15 +9,13 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-      - name: Inspect NBT and Fabric Versions
-        run: |
-          JAR="libs/ArmorPoser-fabric-26.3-16.0.2.jar"
-          echo "=== SYNC DATA NBT KEYS ==="
-          javap -cp "$JAR" -c -p com.mrbysco.armorposer.data.SyncData
-          echo "=== FABRIC LOADER 26.3 ==="
-          curl -s https://meta.fabricmc.net/v2/versions/loader/26.3 | head -c 600
-          echo ""
-          echo "=== FABRIC API 26.3 ==="
-          curl -s https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml | grep -E "26\.3" | tail -n 10
-          echo "=== FABRIC LOOM ==="
-          curl -s https://maven.fabricmc.net/fabric-loom/fabric-loom.gradle.plugin/maven-metadata.xml | grep "<latest>"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.0'
+      - name: Build Mod JAR
+        run: gradle build
+      - name: Upload Mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoulFamiliar-Mod-26.3
+          path: build/libs/SoulFamiliar-26.3-*.jar
