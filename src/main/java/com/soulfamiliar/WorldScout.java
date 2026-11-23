@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
@@ -32,7 +31,7 @@ public final class WorldScout {
     public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
         if (level == null || owner == null) return null;
 
-        // 1. Check immediate danger sneaking behind or near owner (within 8 blocks)
+        // 1. Check immediate danger sneaking behind or near owner (within 8.5 blocks)
         List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(8.5), e ->
                 e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
         );
@@ -40,11 +39,10 @@ public final class WorldScout {
             if (e instanceof Creeper) {
                 return new Discovery("entity:" + e.getUUID(), "крипер", e.getEyePosition(), true);
             }
-            if (e instanceof EnderMan) {
+            if (e.getType().toString().toLowerCase(Locale.ROOT).contains("enderman")) {
                 return new Discovery("entity:" + e.getUUID(), "эндермен", e.getEyePosition(), true);
             }
             if (e instanceof Player p) {
-                // Sneaking player or someone approaching closely
                 if (p.isShiftKeyDown() || p.distanceToSqr(owner) < 25.0) {
                     return new Discovery("player:" + p.getUUID(), "игрок " + p.getName().getString(), p.getEyePosition(), p.isShiftKeyDown());
                 }
@@ -63,7 +61,6 @@ public final class WorldScout {
                     BlockPos bp = center.offset(dx, dy, dz);
                     String highValue = classifyHighValueDiscovery(level.getBlockState(bp));
                     if (highValue != null) {
-                        // Group nearby ore veins into a 4x4x4 sector key so it doesn't spam per block
                         String sectorKey = highValue + ":" + (bp.getX() >> 2) + ":" + (bp.getY() >> 2) + ":" + (bp.getZ() >> 2);
                         return new Discovery(sectorKey, highValue, Vec3.atCenterOf(bp), false);
                     }
