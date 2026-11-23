@@ -3,7 +3,7 @@
   "id": "soulfamiliar",
   "version": "${version}",
   "name": "Soul Familiar",
-  "description": "Client-side D&D familiar addon for Armor Poser with hive-mind shared memory, dynamic moods, respectful etiquette, detailed sight inspection, smooth animations, and chess.",
+  "description": "Client-side D&D familiar addon for Armor Poser with Groq AI context-aware dialogue, model cascade fallback, shared soul-thread memory, unhurried drifting skulls, detailed sight inspection, and chess.",
   "authors": [
     "SoulFamiliar"
   ],

@@ -82,7 +82,7 @@ public class FamiliarManager {
                 SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.0f, 0.75f, false
         );
         String h = FamiliarDialogueEngine.randomHonorific();
-        familiar.speakToOwner(client, "Я услышал ваш зов, " + h + ". Подключаюсь к коллективному разуму и вылетаю на разведку!");
+        familiar.speakToOwner(client, "Я услышал ваш зов, " + h + ". Нить моей души вплелась в вашу свиту — отправляюсь на неспешный дозор.");
     }
 
     public void possessTargetStand(Minecraft client, String name) {
@@ -208,7 +208,6 @@ public class FamiliarManager {
             if (f.resolveBoundStand(client.level) == null) totalEthereal++;
         }
 
-        // Send 1 ArmorPoser update packet per tick (20 pkt/s) for 2x smoother stand animations!
         boolean packetWindow = !chessUsedPacket;
         int chosenForPacket = -1;
         if (packetWindow) {

@@ -3,6 +3,7 @@ package com.soulfamiliar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -28,12 +29,14 @@ public final class FamiliarDialogueEngine {
 
     private boolean chatterEnabled = true;
     private long tickCounter = 0;
-    private long lastChatReactionTick = -400;
-    private long lastAmbientTick = 0;
-    private long lastInitiativeTick = -300;
+    private long lastChatReactionTick = -800;
+    private long lastAmbientTick = -1800;
+    private long lastInitiativeTick = -400;
+    private String lastAmbientCondition = "";
     private final Deque<String> recentLines = new ArrayDeque<>();
+    private final Deque<String> chatHistory = new ArrayDeque<>();
 
-    // Delayed hive-mind reply state
+    // Delayed second-familiar echo state
     private String pendingSpeakerName = null;
     private String pendingSpeech = null;
     private int pendingDelayTicks = 0;
@@ -66,6 +69,23 @@ public final class FamiliarDialogueEngine {
         this.pendingDelayTicks = delayTicks;
     }
 
+    private void recordChatLine(String formattedLine) {
+        if (formattedLine == null || formattedLine.isBlank()) return;
+        String clean = formattedLine.trim();
+        if (clean.length() > 180) {
+            clean = clean.substring(0, 180) + "...";
+        }
+        chatHistory.addLast(clean);
+        while (chatHistory.size() > 14) {
+            chatHistory.removeFirst();
+        }
+    }
+
+    public String getChatTranscript() {
+        if (chatHistory.isEmpty()) return "";
+        return String.join("\n", chatHistory);
+    }
+
     private String pickFreshLine(List<String> candidates) {
         if (candidates.isEmpty()) return null;
         List<String> fresh = new ArrayList<>();
@@ -83,7 +103,7 @@ public final class FamiliarDialogueEngine {
     private void rememberLine(String line) {
         if (line == null) return;
         recentLines.addLast(line);
-        while (recentLines.size() > 28) {
+        while (recentLines.size() > 32) {
             recentLines.removeFirst();
         }
     }
@@ -93,32 +113,100 @@ public final class FamiliarDialogueEngine {
         if (client.level == null || client.player == null) {
             HiveMemory.getInstance().clear();
             pendingSpeech = null;
+            lastAmbientCondition = "";
+            chatHistory.clear();
             return;
         }
 
         List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
         if (all.isEmpty()) return;
 
-        // 1. Delayed hive-mind corroboration / banter
+        // 1. Delayed echo reply from a second familiar
         if (pendingSpeech != null && --pendingDelayTicks <= 0) {
             Familiar f = FamiliarManager.getInstance().getByName(pendingSpeakerName);
             if (f != null) {
                 f.speakToOwner(client, pendingSpeech);
+                recordChatLine("[Дух " + f.getName() + "]: " + pendingSpeech);
             }
             pendingSpeech = null;
             pendingSpeakerName = null;
         }
 
-        // 2. Proactive initiative scan every 3.5 seconds (70 ticks)
-        if (tickCounter % 70 == 0 && (tickCounter - lastInitiativeTick) >= 160) {
+        // 2. Proactive discovery scan every 5 seconds (100 ticks), only reports genuine discoveries
+        if (tickCounter % 100 == 0 && (tickCounter - lastInitiativeTick) >= 280) {
             runInitiativeScan(client, all);
         }
 
-        // 3. Mood-driven ambient observations every ~48 seconds
-        if (chatterEnabled && tickCounter % 100 == 0 && (tickCounter - lastAmbientTick) >= 960) {
-            lastAmbientTick = tickCounter;
-            speakMoodObservation(client, all);
+        // 3. Situational observations every ~90 seconds — ONLY when there is a real environmental condition!
+        if (chatterEnabled && tickCounter % 120 == 0 && (tickCounter - lastAmbientTick) >= 1800) {
+            speakSituationalObservation(client, all);
         }
+    }
+
+    /**
+     * Handles free-form conversation from the Master (either via silent `.f` or direct mention in chat).
+     */
+    public void handleDirectConversationWithMaster(Minecraft client, Familiar speaker, String masterMessage, boolean isPrivateWhisper) {
+        if (client.level == null || client.player == null || speaker == null) return;
+
+        List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
+        recordChatLine("[" + (isPrivateWhisper ? "Шёпот Повелителя" : "Повелитель") + " -> " + speaker.getName() + "]: " + masterMessage);
+
+        String worldCtx = WorldScout.buildCompactAiWorldSummary(client.level, client.player, speaker, tickCounter);
+        String transcript = getChatTranscript();
+        String task = (isPrivateWhisper
+                ? "Повелитель мысленно обращается к тебе (тайно от других игроков): «" + masterMessage + "». "
+                : "Повелитель сказал в чате: «" + masterMessage + "». ")
+                + "Ответь ему живо, осмысленно и в характере, учитывая обстановку вокруг и контекст недавнего чата.";
+
+        GroqBrain.getInstance().askFamiliarAsync(
+                client, speaker, all, worldCtx, transcript, task,
+                reply -> {
+                    applyGestureTag(speaker, reply.gestureTag());
+                    rememberLine(reply.text());
+                    speaker.speakToOwner(client, reply.text());
+                    recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
+
+                    // 30% chance a second familiar adds a brief follow-up comment in character
+                    if (all.size() >= 2 && ThreadLocalRandom.current().nextDouble() < 0.30) {
+                        Familiar other = pickOtherFamiliar(all, speaker);
+                        if (other != null) {
+                            triggerSecondFamiliarFollowUp(client, other, speaker, reply.text());
+                        }
+                    }
+                },
+                () -> {
+                    // Local fallback if offline or API key not set
+                    String fallback = generateRespectfulMoodQuip(
+                            speaker.getMood(), masterMessage.toLowerCase(Locale.ROOT),
+                            true, true, client.player.getName().getString().toLowerCase(Locale.ROOT), true, false
+                    );
+                    if (fallback != null) {
+                        speaker.speakToOwner(client, fallback);
+                        recordChatLine("[Дух " + speaker.getName() + "]: " + fallback);
+                    }
+                }
+        );
+    }
+
+    private void triggerSecondFamiliarFollowUp(Minecraft client, Familiar second, Familiar first, String firstReply) {
+        if (client.level == null || client.player == null) return;
+        List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
+        String worldCtx = WorldScout.buildCompactAiWorldSummary(client.level, client.player, second, tickCounter);
+        String task = "Твой собрат-дух " + first.getName() + " только что сказал Повелителю: «" + firstReply + "». "
+                + "Добавь короткую реплику в своём настроении (" + second.getMood().getRussianLabel() + "), поддержав или мягко подколов собрата, сохраняя почтение к Повелителю.";
+
+        GroqBrain.getInstance().askFamiliarAsync(
+                client, second, all, worldCtx, getChatTranscript(), task,
+                reply -> scheduleDelayedSpeech(second.getName(), reply.text(), 45),
+                () -> {
+                    List<String> localEcho = List.of(
+                            "Простите " + first.getName() + " за излишнее красноречие, " + randomHonorific() + ", но в его словах есть истина.",
+                            "Наши тени незримо согласны с этим, Повелитель."
+                    );
+                    scheduleDelayedSpeech(second.getName(), pickFreshLine(localEcho), 45);
+                }
+        );
     }
 
     private void runInitiativeScan(Minecraft client, List<Familiar> all) {
@@ -136,11 +224,10 @@ public final class FamiliarDialogueEngine {
 
         if (!chatterEnabled && !found.isDanger()) return;
 
-        // Record into the Collective Mind; only announce if new to the Hive!
-        boolean isNewToHive = HiveMemory.getInstance().recordDiscovery(
+        boolean isNewToSpirits = HiveMemory.getInstance().recordDiscovery(
                 found.uniqueKey(), found.label(), found.pos(), scout.getName(), tickCounter, found.isDanger()
         );
-        if (!isNewToHive) return;
+        if (!isNewToSpirits) return;
 
         lastInitiativeTick = tickCounter;
         String dir = WorldScout.relativeDirection(owner, found.pos());
@@ -148,17 +235,19 @@ public final class FamiliarDialogueEngine {
         String h = randomHonorific();
 
         if (found.isDanger()) {
-            String line = buildDangerLine(scout.getMood(), h, found.label(), dist, dir);
+            String line = buildDangerLine(h, found.label(), dist, dir);
             scout.speakToOwner(client, line);
+            recordChatLine("[Дух " + scout.getName() + "]: " + line);
             level.playLocalSound(origin.x, origin.y, origin.z, SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.PLAYERS, 0.8f, 0.65f, false);
             if (scout.isBound()) {
                 scout.triggerPoint(found.pos());
             } else {
-                scout.focusOnLocation(found.pos(), 85);
+                scout.focusOnLocation(found.pos(), 140);
             }
         } else {
-            String line = buildLootLine(scout.getMood(), h, found.label(), dist, dir);
+            String line = buildLootLine(h, found.label(), dist, dir);
             scout.speakToOwner(client, line);
+            recordChatLine("[Дух " + scout.getName() + "]: " + line);
             level.playLocalSound(found.pos().x, found.pos().y, found.pos().z, SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 0.85f, 1.25f, false);
             for (int i = 0; i < 16; i++) {
                 level.addParticle(ParticleTypes.SOUL_FIRE_FLAME,
@@ -170,19 +259,18 @@ public final class FamiliarDialogueEngine {
             if (scout.isBound()) {
                 scout.triggerPoint(found.pos());
             } else {
-                scout.focusOnLocation(found.pos(), 125);
+                scout.focusOnLocation(found.pos(), 180);
             }
 
-            // Collective Mind confirmation from a second familiar!
-            if (all.size() >= 2 && rng.nextDouble() < 0.55) {
+            if (all.size() >= 2 && rng.nextDouble() < 0.45) {
                 Familiar second = pickOtherFamiliar(all, scout);
                 if (second != null) {
-                    List<String> hiveReplies = List.of(
-                            "Подтверждаю, " + randomHonorific() + ": через нашу общую память я тоже вижу " + found.label() + ", о которой доложил " + scout.getName() + ".",
-                            "Наш единый разум зафиксировал находку, Повелитель. Я уже запомнил координаты, если прикажете показать путь.",
-                            "Вижу то же самое глазами " + scout.getName() + ", Господин. Достойная добыча."
+                    List<String> spiritEchoReplies = List.of(
+                            "Эфирный шёпот " + scout.getName() + " донёс до меня ту же весть, " + randomHonorific() + " — я тоже чувствую " + found.label() + ".",
+                            "Нить, связывающая наши души, подтверждает находку, Повелитель. Я запомнил дорогу к этому месту.",
+                            "Я уловил отголосок взора " + scout.getName() + ", Господин. Достойная добыча."
                     );
-                    scheduleDelayedSpeech(second.getName(), pickFreshLine(hiveReplies), 48);
+                    scheduleDelayedSpeech(second.getName(), pickFreshLine(spiritEchoReplies), 55);
                 }
             }
         }
@@ -198,10 +286,13 @@ public final class FamiliarDialogueEngine {
         String lower = rawText.toLowerCase(Locale.ROOT);
         String ownerNick = client.player.getName().getString().toLowerCase(Locale.ROOT);
 
-        if (rawText.startsWith("[Фамильяр]") || rawText.startsWith("[Коллективный разум]")) return;
+        if (rawText.startsWith("[Фамильяр]")) return;
         for (Familiar f : all) {
             if (rawText.startsWith("[" + f.getName() + "]")) return;
         }
+
+        // Always record incoming server chat into the context buffer so familiars understand the full thread!
+        recordChatLine(rawText);
 
         boolean fromOwner = isPlayerChat && (lower.startsWith("<" + ownerNick + ">") || lower.contains(ownerNick + ":") || lower.contains(ownerNick + " »"));
         if (fromOwner && isCommandLike(lower)) return;
@@ -223,31 +314,112 @@ public final class FamiliarDialogueEngine {
                 || lower.contains("drowned") || lower.contains("burned") || lower.contains("tried to swim in lava")
                 || lower.contains("умер") || lower.contains("погиб") || lower.contains("взорвал") || lower.contains("упал") || lower.contains("сгорел"));
 
-        if (mentioned == null && !isDeath && (tickCounter - lastChatReactionTick) < 220) {
+        // Decide whether to react to general chat
+        boolean isImportantTopic = isDeath || mentioned != null
+                || lower.contains("алмаз") || lower.contains("крипер") || lower.contains("помоги")
+                || lower.contains("убивают") || lower.contains("торг") || lower.contains("продам")
+                || lower.contains("куплю") || lower.contains(ownerNick);
+
+        if (mentioned == null && !isDeath) {
+            // Cooldown 22 seconds (440 ticks) for general chat reactions
+            if ((tickCounter - lastChatReactionTick) < 440) return;
+            // If it's just random casual chatter not mentioning owner or hot topics, react only 30% of the time
+            if (!isImportantTopic && rng.nextDouble() > 0.30) return;
+        }
+
+        lastChatReactionTick = tickCounter;
+
+        // If Groq AI is configured, generate a true context-aware reply reading the chat history!
+        if (FamiliarConfig.getInstance().hasActiveAi()) {
+            String worldCtx = WorldScout.buildCompactAiWorldSummary(client.level, client.player, speaker, tickCounter);
+            String transcript = getChatTranscript();
+            String task;
+            if (isDeath) {
+                task = "В чате появилось сообщение о смерти: «" + rawText + "». Если погиб сам Повелитель — искренне посочувствуй и пообещай сторожить место. Если погиб другой игрок — язвительно прокомментируй хрупкость смертных для Повелителя.";
+            } else if (mentioned != null) {
+                task = "В чате упомянули твоё имя («" + rawText + "»). Ответь с учётом контекста переписки и обстановки, обращаясь к Повелителю.";
+            } else if (fromOwner) {
+                task = "Повелитель написал в общий чат другим игрокам: «" + rawText + "». Дай ему краткий, остроумный или полезный комментарий шёпотом, учитывая, с кем и о чём он переписывается в чате.";
+            } else {
+                task = "Прочитай историю переписки игроков в чате (последнее сообщение: «" + rawText + "») и дай Повелителю живой, саркастичный или наблюдательный комментарий о том, что происходит между игроками.";
+            }
+
+            GroqBrain.getInstance().askFamiliarAsync(
+                    client, speaker, all, worldCtx, transcript, task,
+                    reply -> {
+                        applyGestureTag(speaker, reply.gestureTag());
+                        rememberLine(reply.text());
+                        speaker.speakToOwner(client, reply.text());
+                        recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
+                    },
+                    () -> {
+                        String fallback = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, mentioned != null, isDeath);
+                        if (fallback != null) {
+                            speaker.speakToOwner(client, fallback);
+                            recordChatLine("[Дух " + speaker.getName() + "]: " + fallback);
+                        }
+                    }
+            );
             return;
         }
 
+        // Offline / No-key fallback
         String quip = generateRespectfulMoodQuip(speaker.getMood(), lower, isPlayerChat, fromOwner, ownerNick, mentioned != null, isDeath);
         if (quip == null) return;
 
-        lastChatReactionTick = tickCounter;
         speaker.speakToOwner(client, quip);
+        recordChatLine("[Дух " + speaker.getName() + "]: " + quip);
 
-        // Occasional hive-mind chime-in from a second familiar
-        if (all.size() >= 2 && rng.nextDouble() < 0.35) {
+        if (all.size() >= 2 && rng.nextDouble() < 0.30) {
             Familiar other = pickOtherFamiliar(all, speaker);
             if (other != null) {
                 List<String> followUps = List.of(
-                        "Простите " + speaker.getName() + " за излишнее красноречие, " + randomHonorific() + ", но по сути он прав.",
-                        "Наш общий разум полностью разделяет эту мысль, Повелитель.",
+                        "Простите " + speaker.getName() + " за излишнее красноречие, " + randomHonorific() + ", но в его словах есть истина.",
+                        "Наши тени незримо согласны с этим, Повелитель.",
                         "Как верно подметил " + speaker.getName() + ", Господин. Мы всегда начеку."
                 );
-                scheduleDelayedSpeech(other.getName(), pickFreshLine(followUps), 46);
+                scheduleDelayedSpeech(other.getName(), pickFreshLine(followUps), 50);
             }
         }
     }
 
+    private void applyGestureTag(Familiar speaker, String tag) {
+        if (tag == null || speaker == null) return;
+        switch (tag) {
+            case "NOD" -> speaker.triggerNod();
+            case "SHAKE" -> speaker.triggerShakeHead();
+            case "BOW" -> {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.player != null) speaker.triggerBow(mc.player.position());
+            }
+            case "THINK" -> speaker.setMode(FamiliarMode.THINK);
+            case "DRAMA" -> speaker.setMode(FamiliarMode.DRAMA);
+            case "APPLAUD" -> speaker.setMode(FamiliarMode.APPLAUD);
+            case "THREATEN" -> speaker.setMode(FamiliarMode.THREATEN);
+            case "DANCE" -> speaker.setMode(FamiliarMode.DANCE);
+        }
+    }
+
     public void speakMoodJoke(Minecraft client, Familiar speaker) {
+        if (FamiliarConfig.getInstance().hasActiveAi() && client.level != null && client.player != null) {
+            List<Familiar> all = new ArrayList<>(FamiliarManager.getInstance().getAll());
+            String worldCtx = WorldScout.buildCompactAiWorldSummary(client.level, client.player, speaker, tickCounter);
+            GroqBrain.getInstance().askFamiliarAsync(
+                    client, speaker, all, worldCtx, getChatTranscript(),
+                    "Повелитель попросил тебя пошутить или рассказать остроумную мрачную байку. Выдай одну свежую, остроумную шутку в духе тёмного фэнтези, обращаясь к Повелителю.",
+                    reply -> {
+                        applyGestureTag(speaker, reply.gestureTag() != null ? reply.gestureTag() : "SHAKE");
+                        rememberLine(reply.text());
+                        speaker.speakToOwner(client, reply.text());
+                    },
+                    () -> speakLocalMoodJoke(client, speaker)
+            );
+            return;
+        }
+        speakLocalMoodJoke(client, speaker);
+    }
+
+    private void speakLocalMoodJoke(Minecraft client, Familiar speaker) {
         String h = randomHonorific();
         List<String> pool = switch (speaker.getMood()) {
             case DEVOTED -> List.of(
@@ -275,7 +447,7 @@ public final class FamiliarDialogueEngine {
         speaker.triggerShakeHead();
     }
 
-    private void speakMoodObservation(Minecraft client, List<Familiar> all) {
+    private void speakSituationalObservation(Minecraft client, List<Familiar> all) {
         LocalPlayer owner = client.player;
         ClientLevel level = client.level;
         if (owner == null || level == null) return;
@@ -284,43 +456,36 @@ public final class FamiliarDialogueEngine {
         if (speaker.getMode() == FamiliarMode.FROZEN) return;
 
         String h = randomHonorific();
+        String conditionKey = "";
         List<String> pool = new ArrayList<>();
 
+        BlockPos ownerPos = owner.blockPosition();
         if (owner.getHealth() <= owner.getMaxHealth() * 0.45f) {
+            conditionKey = "low_hp";
             pool.add("Ваши жизненные силы на исходе, " + h + ". Позвольте настоятельно рекомендовать вам подкрепиться!");
             pool.add("Я чувствую вашу боль через нашу связь, " + h + ". Будьте осторожны, вы нам нужны живым.");
-        }
-        if (level.dimension() == Level.NETHER) {
+        } else if (level.dimension() == Level.NETHER) {
+            conditionKey = "nether";
             pool.add("Жар Нижнего мира обжигает даже эфир, " + h + ", но я не отступлю ни на шаг.");
             pool.add("Будьте бдительны среди этих багровых пустошей, Владыка — пиглины не знают почтения.");
         } else if (level.dimension() == Level.END) {
+            conditionKey = "end";
             pool.add("Холодная бездна Края шепчет древние тайны, " + h + ". Не смотрите в глаза местным стражам.");
-        } else if (owner.getY() < 40 && !level.canSeeSky(owner.blockPosition())) {
-            pool.add("Глубины земли хранят несметные сокровища для вас, " + h + ". Я продолжаю сканировать породу.");
+        } else if (owner.getY() < 32 && !level.canSeeSky(ownerPos)) {
+            conditionKey = "deep_cave";
+            pool.add("Глубины земли хранят несметные сокровища для вас, " + h + ". Я продолжаю вглядываться в породу.");
             pool.add("Сырость и мрак подземелий мне привычны, Господин, но ваш факел радует взор.");
-        } else if (level.isRaining()) {
-            pool.add("Небеса проливаются дождём, " + h + ". Хорошо, что моему эфирному облику не грозит простуда.");
+        } else if (level.isThundering()) {
+            conditionKey = "thunder";
+            pool.add("Небеса разрывает гроза, " + h + ". Держитесь подальше от высоких деревьев и открытых вершин.");
         }
 
-        switch (speaker.getMood()) {
-            case DEVOTED -> {
-                pool.add("Все границы вокруг проверены, " + h + ". Служить вам — великая честь.");
-                pool.add("Я внимательно слежу за каждым шорохом вокруг, мой господин.");
-            }
-            case PHILOSOPHICAL -> {
-                pool.add("Тишина этого мира обманчива, " + h + ", но под вашим началом нам нечего страшиться.");
-                pool.add("Любопытно наблюдать за течением времени смертных, оставаясь вашей верной тенью, Владыка.");
-            }
-            case MISCHIEVOUS -> {
-                pool.add("Скучновато без приключений, " + h + ". Может, устроим засаду или проверим дальние пещеры?");
-                pool.add("Мои глазницы так и ищут для вас сундук покрупнее, Господин!");
-            }
-            case MELANCHOLIC -> {
-                pool.add("Ветер странствий вновь ведёт нас вперёд, " + h + ". Куда лежит ваш путь теперь?");
-                pool.add("Даже в тишине я слышу отголоски древней магии, что связывает нас, Повелитель.");
-            }
+        if (pool.isEmpty() || conditionKey.equals(lastAmbientCondition)) {
+            return;
         }
 
+        lastAmbientCondition = conditionKey;
+        lastAmbientTick = tickCounter;
         speaker.speakToOwner(client, pickFreshLine(pool));
     }
 
@@ -400,18 +565,8 @@ public final class FamiliarDialogueEngine {
                     "Позвольте развеять вашу скуку, Господин — просто отдайте приказ."
             ));
         }
-        if (lower.contains("торг") || lower.contains("продам") || lower.contains("куплю")) {
-            return pickFreshLine(List.of(
-                    "Местные торговцы суетятся в чате, " + h + ", но истинные сокровища мы добудем сами."
-            ));
-        }
-        if (lower.contains("лаг") || lower.contains("пинг") || lower.contains("tps")) {
-            return pickFreshLine(List.of(
-                    "Ткань этого мира слегка дрожит, " + h + ", но наша ментальная связь нерушима."
-            ));
-        }
 
-        if (isPlayerChat && !fromOwner && ThreadLocalRandom.current().nextDouble() < 0.30) {
+        if (isPlayerChat && !fromOwner && ThreadLocalRandom.current().nextDouble() < 0.15) {
             return pickFreshLine(List.of(
                     "Другие путники ведут беседы в чате, " + h + ", но их слова не заслуживают вашего внимания.",
                     "Любопытно наблюдать за суетой смертных со стороны, не так ли, Владыка?"
@@ -421,7 +576,7 @@ public final class FamiliarDialogueEngine {
         return null;
     }
 
-    private String buildDangerLine(FamiliarMood mood, String h, String threatLabel, int dist, String dir) {
+    private String buildDangerLine(String h, String threatLabel, int dist, String dir) {
         return pickFreshLine(List.of(
                 "Берегитесь, " + h + "! В " + dist + " бл. " + dir + " замечен " + threatLabel + "!",
                 "Тревога, мой господин! Прямо " + dir + " (" + dist + " бл.) подкрадывается " + threatLabel + ".",
@@ -429,11 +584,11 @@ public final class FamiliarDialogueEngine {
         ));
     }
 
-    private String buildLootLine(FamiliarMood mood, String h, String lootLabel, int dist, String dir) {
+    private String buildLootLine(String h, String lootLabel, int dist, String dir) {
         return pickFreshLine(List.of(
-                "Спешу доложить, " + h + "! Я обнаружил ценность: " + lootLabel + " в " + dist + " бл. " + dir + ". Передаю координаты в наш общий разум!",
-                "Благоприятная находка, мой господин! " + lootLabel + " (" + dist + " бл. " + dir + ") — я отметил это место для вас.",
-                "Позвольте порадовать вас, Владыка: " + dir + " в " + dist + " бл. скрывается " + lootLabel + "."
+                "Спешу доложить, " + h + "! Я уловил отблеск тайны: " + lootLabel + " в " + dist + " бл. " + dir + ". Остальные тени уже чувствуют мой зов.",
+                "Благоприятная находка, мой господин! " + lootLabel + " (" + dist + " бл. " + dir + ") — я запечатлел это место в нашем общем эфире.",
+                "Позвольте порадовать вас, Владыка: " + dir + " в " + dist + " бл. сокрыта находка — " + lootLabel + "."
         ));
     }
 
@@ -456,6 +611,6 @@ public final class FamiliarDialogueEngine {
                 || lower.contains("где ") || lower.contains("найди ") || lower.contains("погуляй")
                 || lower.contains("на плечо") || lower.contains("молчи") || lower.contains("тихо")
                 || lower.contains("болтай") || lower.contains("настроен") || lower.contains("память")
-                || lower.contains("разум");
+                || lower.contains("разум") || lower.contains("находк");
     }
 }

@@ -51,10 +51,10 @@ public class PoseState {
     public static PoseState idle(float yaw, float time) {
         PoseState p = new PoseState();
         p.bodyYaw = yaw;
-        float breath = Mth.sin(time * 0.10f);
-        float slowSway = Mth.cos(time * 0.05f);
+        float breath = Mth.sin(time * 0.09f);
+        float slowSway = Mth.cos(time * 0.045f);
         p.headX = 2.0f + breath * 1.8f;
-        p.headY = Mth.sin(time * 0.035f) * 9.0f;
+        p.headY = Mth.sin(time * 0.03f) * 9.0f;
         p.headZ = slowSway * 1.5f;
         p.bodyX = breath * 1.1f;
         p.bodyZ = slowSway * 0.8f;
@@ -86,7 +86,7 @@ public class PoseState {
         p.headX = Mth.clamp(headPitch, -45.0f, 45.0f);
         p.headY = Mth.clamp(headYawOffset, -55.0f, 55.0f);
         p.bodyX = 4.0f;
-        float sway = Mth.sin(time * 0.16f) * 2.8f;
+        float sway = Mth.sin(time * 0.15f) * 2.8f;
         p.leftArmX = -42.0f + sway;
         p.leftArmY = 18.0f;
         p.leftArmZ = -14.0f;
@@ -116,7 +116,7 @@ public class PoseState {
     public static PoseState sprint(float yaw, float time) {
         PoseState p = new PoseState();
         p.bodyYaw = yaw;
-        float swing = Mth.sin(time * 0.95f) * 48.0f;
+        float swing = Mth.sin(time * 0.90f) * 46.0f;
         p.headX = -10.0f;
         p.bodyX = 14.0f;
         p.leftArmX = swing;
@@ -132,7 +132,7 @@ public class PoseState {
         p.headX = -4.0f;
         p.bodyX = 2.0f;
         if (moving) {
-            float swing = Mth.sin(time * 0.58f) * 58.0f;
+            float swing = Mth.sin(time * 0.55f) * 56.0f;
             p.leftArmX = swing;
             p.rightArmX = -swing;
             p.leftLegX = -swing * 0.85f;

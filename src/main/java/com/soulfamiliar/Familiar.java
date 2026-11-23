@@ -36,14 +36,12 @@ public class Familiar {
     private final PoseState currentPose = new PoseState();
     private boolean initializedFlags = false;
 
-    // Autonomous roaming for ethereal skull (up to 22 blocks!)
     private boolean roamEnabled = true;
     private Vec3 roamGoal = null;
     private int roamPauseTicks = 0;
     private Vec3 inspectFocusPos = null;
     private int inspectTicksLeft = 0;
 
-    // Action state
     private int actionTimer = 0;
     private Vec3 pointTarget = null;
     private UUID scareTargetUuid = null;
@@ -179,7 +177,7 @@ public class Familiar {
         this.pointTarget = target;
         this.actionTimer = 85;
         this.inspectFocusPos = target.add(0, 0.9, 0);
-        this.inspectTicksLeft = 100;
+        this.inspectTicksLeft = 160;
     }
 
     public void triggerNod() {
@@ -234,25 +232,24 @@ public class Familiar {
         String h = FamiliarDialogueEngine.randomHonorific();
 
         if (res == null) {
-            speakToOwner(client, "Я просканировал окрестности и сверился с нашим общим разумом, " + h + ", но «" + query + "» в радиусе поиска не обнаружено.");
+            speakToOwner(client, "Я облетел окрестности и прислушался к эху наших душ, " + h + ", но «" + query + "» поблизости не обнаружено.");
             triggerShakeHead();
             return;
         }
 
-        // Store in HiveMemory so all other familiars immediately know it too!
         HiveMemory.getInstance().recordDiscovery("search:" + res.label() + ":" + ((int) res.pos().x >> 2), res.label(), res.pos(), this.name, currentTick, false);
 
         int dist = (int) Math.round(res.distance());
         if (res.fromMemoryScout() != null && !res.fromMemoryScout().equalsIgnoreCase(this.name)) {
-            speakToOwner(client, "Через нашу коллективную память я вижу то, что ранее заметил " + res.fromMemoryScout() + ", " + h + ": " + res.label() + " в " + dist + " бл. " + res.direction() + "!");
+            speakToOwner(client, "Наши души сплетены единым эхом, " + h + " — взор " + res.fromMemoryScout() + " уже запечатлел " + res.label() + " в " + dist + " бл. " + res.direction() + ".");
         } else {
-            speakToOwner(client, "Найдено, " + h + "! Это " + res.label() + " — примерно " + dist + " бл. " + res.direction() + ". Я передал координаты остальным духам.");
+            speakToOwner(client, "Я отыскал то, что вы желали, " + h + ": " + res.label() + " — примерно в " + dist + " бл. " + res.direction() + ". Мои собратья уже чувствуют этот след.");
         }
 
         if (isBound()) {
             triggerPoint(res.pos());
         } else {
-            focusOnLocation(res.pos(), 130);
+            focusOnLocation(res.pos(), 180);
         }
     }
 
@@ -265,7 +262,6 @@ public class Familiar {
         LocalPlayer player = client.player;
         if (level == null || player == null) return;
 
-        // Periodically shift mood naturally (~every 4 minutes)
         if (tickCount > 0 && tickCount % 4800 == (index * 700L)) {
             cycleMood();
         }
@@ -332,7 +328,6 @@ public class Familiar {
                     desired = PoseState.jumpscare(yawToPlayer);
                     desired.bodyX = -8.0f;
                 } else if (hiveFocus != null && hiveFocus.distanceToSqr(standPos) < 625.0) {
-                    // Collective mind reaction: all bound stands subtly turn their gaze toward a shared discovery!
                     float yawToDiscovery = yawBetween(standPos, hiveFocus);
                     float pitchToDiscovery = pitchBetween(standPos.add(0, 1.5, 0), hiveFocus);
                     desired = PoseState.idle(yawToDiscovery, tickCount);
@@ -376,7 +371,7 @@ public class Familiar {
                 Vec3 desiredPos = player.position().add(-Mth.sin(rad) * 1.5, 0.45 + Math.sin(tickCount * 0.1) * 0.12, Mth.cos(rad) * 1.5);
                 Vec3 diff = desiredPos.subtract(standPos);
                 if (diff.length() > 0.12) {
-                    moveDelta = diff.scale(0.32);
+                    moveDelta = diff.scale(0.28);
                 }
                 desired = PoseState.idle(player.getYRot(), tickCount);
                 desired.leftLegX = 14.0f;
@@ -387,7 +382,7 @@ public class Familiar {
                 double hoverY = player.getY() + 0.65 + Math.sin(tickCount * 0.08) * 0.14;
                 double dy = hoverY - standPos.y;
                 if (Math.abs(dy) > 0.03) {
-                    moveDelta = new Vec3(0, dy * 0.22, 0);
+                    moveDelta = new Vec3(0, dy * 0.20, 0);
                 }
                 desired = PoseState.meditate(currentPose.bodyYaw, tickCount);
             }
@@ -424,7 +419,7 @@ public class Familiar {
                 );
                 Vec3 diff = slot.subtract(standPos);
                 if (diff.length() > 0.12) {
-                    moveDelta = diff.scale(0.32);
+                    moveDelta = diff.scale(0.30);
                     desired = PoseState.sprint(yawBetween(standPos, slot), tickCount);
                 } else {
                     float outwardYaw = yawBetween(player.position(), standPos);
@@ -439,7 +434,7 @@ public class Familiar {
                 Vec3 slot = player.position().add(forward.scale(2.4)).add(right.scale(offset));
                 Vec3 diff = slot.subtract(standPos);
                 if (diff.length() > 0.12) {
-                    moveDelta = diff.scale(0.32);
+                    moveDelta = diff.scale(0.30);
                     desired = PoseState.sprint(yawBetween(standPos, slot), tickCount);
                 } else {
                     desired = PoseState.guard(player.getYRot(), 0.0f, 0.0f, tickCount);
@@ -455,7 +450,7 @@ public class Familiar {
                 Vec3 diff = slot.subtract(standPos);
                 boolean moving = diff.length() > 0.18;
                 if (moving) {
-                    moveDelta = diff.scale(0.35);
+                    moveDelta = diff.scale(0.33);
                 }
                 desired = PoseState.march(player.getYRot(), tickCount, moving);
             }
@@ -474,7 +469,7 @@ public class Familiar {
                 if (targetWatching) {
                     desired = PoseState.guard(yawToTarget, 0.0f, 0.0f, 0.0f);
                 } else if (diff.length() > 0.30) {
-                    moveDelta = diff.normalize().scale(Math.min(diff.length(), 0.45));
+                    moveDelta = diff.normalize().scale(Math.min(diff.length(), 0.42));
                     desired = PoseState.sprint(yawToTarget, tickCount);
                 } else {
                     desired = PoseState.guard(yawToTarget, 0.0f, 0.0f, tickCount);
@@ -493,7 +488,7 @@ public class Familiar {
                     double dist = toTarget.length();
                     float yaw = yawBetween(standPos, victim.position());
                     if (dist > 0.45 && actionTimer++ < 25) {
-                        double step = Math.min(dist, 0.90);
+                        double step = Math.min(dist, 0.85);
                         moveDelta = toTarget.normalize().scale(step);
                         desired = PoseState.sprint(yaw, tickCount * 1.5f);
                     } else {
@@ -513,7 +508,7 @@ public class Familiar {
                         Vec3 back = scareOrigin.subtract(standPos);
                         double dist = back.length();
                         if (dist > 0.25 && actionTimer++ < 30) {
-                            moveDelta = back.normalize().scale(Math.min(dist, 0.60));
+                            moveDelta = back.normalize().scale(Math.min(dist, 0.55));
                             desired = PoseState.idle(yawBetween(standPos, scareOrigin), tickCount);
                         } else {
                             mode = FamiliarMode.IDLE;
@@ -525,8 +520,7 @@ public class Familiar {
             }
         }
 
-        // Smooth organic interpolation (higher frequency packets + smoothstep damping)
-        float lerpSpeed = (mode == FamiliarMode.SCARE || mode == FamiliarMode.POSSESSED || mode == FamiliarMode.DANCE) ? 0.52f : 0.28f;
+        float lerpSpeed = (mode == FamiliarMode.SCARE || mode == FamiliarMode.POSSESSED || mode == FamiliarMode.DANCE) ? 0.50f : 0.26f;
         currentPose.lerpTowards(desired, lerpSpeed);
 
         if (canSendPacket) {
@@ -552,7 +546,7 @@ public class Familiar {
         float angleDeg = player.getYRot() + sideSign * (58.0f + tier * 24.0f);
         float rad = angleDeg * Mth.DEG_TO_RAD;
         double shoulderDist = 0.85 + tier * 0.35;
-        double bob = Math.sin((tickCount + index * 11) * 0.11) * 0.11;
+        double bob = Math.sin((tickCount + index * 11) * 0.075) * 0.11;
         Vec3 shoulderPos = new Vec3(
                 player.getX() - Mth.sin(rad) * shoulderDist,
                 player.getY() + 1.48 + tier * 0.32 + bob,
@@ -564,42 +558,44 @@ public class Familiar {
         }
 
         Vec3 targetPos = shoulderPos;
-        float targetYaw = player.getYRot() + Mth.sin((tickCount + index * 7) * 0.06f) * 14.0f;
-        float targetPitch = player.getXRot() * 0.5f + Mth.cos(tickCount * 0.1f) * 6.0f;
-        double moveLerp = 0.18;
+        float targetYaw = player.getYRot() + Mth.sin((tickCount + index * 7) * 0.045f) * 14.0f;
+        float targetPitch = player.getXRot() * 0.5f + Mth.cos(tickCount * 0.07f) * 6.0f;
+        double moveLerp = 0.065;
 
         Vec3 hiveFocus = HiveMemory.getInstance().getSharedFocusPos(tickCount);
 
         if (skullOverridePos != null) {
-            targetPos = skullOverridePos.add(0, Math.sin(tickCount * 0.18) * 0.12, 0);
-            targetYaw = (tickCount * 6.0f) % 360.0f;
+            targetPos = skullOverridePos.add(0, Math.sin(tickCount * 0.12) * 0.12, 0);
+            targetYaw = (tickCount * 3.5f) % 360.0f;
             targetPitch = 15.0f;
+            moveLerp = 0.055;
         } else if (inspectTicksLeft > 0 && inspectFocusPos != null) {
             inspectTicksLeft--;
             if (inspectFocusPos.distanceToSqr(player.position()) <= 625.0) {
-                targetPos = inspectFocusPos.add(0, 0.55 + Math.sin(tickCount * 0.15) * 0.12, 0);
+                targetPos = inspectFocusPos.add(0, 0.55 + Math.sin(tickCount * 0.10) * 0.12, 0);
             } else {
                 Vec3 dir = inspectFocusPos.subtract(player.getEyePosition()).normalize();
                 targetPos = player.getEyePosition().add(dir.scale(2.5));
             }
             targetYaw = yawBetween(currentSkullPos, inspectFocusPos);
             targetPitch = pitchBetween(currentSkullPos, inspectFocusPos);
-            moveLerp = 0.11;
+            moveLerp = 0.036;
         } else if (mode == FamiliarMode.STALK) {
             Entity target = findEntityByUuid(level, stalkTargetUuid);
             if (target != null && target.isAlive() && target.distanceToSqr(player) <= 625.0) {
                 targetPos = target.getEyePosition().subtract(target.getLookAngle().scale(1.4)).add(0, 0.55, 0);
                 targetYaw = yawBetween(currentSkullPos, target.getEyePosition());
                 targetPitch = 12.0f;
-                moveLerp = 0.13;
+                moveLerp = 0.045;
             } else {
                 mode = FamiliarMode.IDLE;
             }
         } else if (mode == FamiliarMode.DANCE) {
-            double orbitAngle = (tickCount * 0.18) + index * 2.1;
-            targetPos = player.position().add(Math.cos(orbitAngle) * 1.4, 1.85 + Math.sin(tickCount * 0.45) * 0.35, Math.sin(orbitAngle) * 1.4);
-            targetYaw = (tickCount * 16.0f) % 360.0f;
-            targetPitch = Mth.sin(tickCount * 0.55f) * 25.0f;
+            double orbitAngle = (tickCount * 0.11) + index * 2.1;
+            targetPos = player.position().add(Math.cos(orbitAngle) * 1.4, 1.85 + Math.sin(tickCount * 0.30) * 0.30, Math.sin(orbitAngle) * 1.4);
+            targetYaw = (tickCount * 10.0f) % 360.0f;
+            targetPitch = Mth.sin(tickCount * 0.40f) * 22.0f;
+            moveLerp = 0.08;
             if (tickCount % 6 == 0) {
                 level.addParticle(ParticleTypes.NOTE, currentSkullPos.x, currentSkullPos.y + 0.4, currentSkullPos.z, rng.nextDouble(), 0.0, 0.0);
             }
@@ -608,6 +604,7 @@ public class Familiar {
             targetPos = new Vec3(player.getX() + Math.cos(angle) * 2.4, player.getY() + 1.65 + bob, player.getZ() + Math.sin(angle) * 2.4);
             targetYaw = yawBetween(player.position(), targetPos);
             targetPitch = 0.0f;
+            moveLerp = 0.055;
         } else if (mode == FamiliarMode.FORMATION_LINE) {
             float yawRad = player.getYRot() * Mth.DEG_TO_RAD;
             Vec3 forward = new Vec3(-Mth.sin(yawRad), 0, Mth.cos(yawRad));
@@ -616,15 +613,16 @@ public class Familiar {
             targetPos = player.position().add(forward.scale(2.2)).add(right.scale(offset)).add(0, 1.6 + bob, 0);
             targetYaw = player.getYRot();
             targetPitch = 0.0f;
+            moveLerp = 0.055;
         } else if (mode == FamiliarMode.MARCH) {
             float yawRad = player.getYRot() * Mth.DEG_TO_RAD;
             Vec3 back = new Vec3(Mth.sin(yawRad), 0, -Mth.cos(yawRad));
             Vec3 right = new Vec3(Mth.cos(yawRad), 0, Mth.sin(yawRad));
             double side = (groupTotal == 1) ? 0.0 : ((groupIndex % 2 == 0) ? -0.7 : 0.7);
-            targetPos = player.position().add(back.scale(1.6 + (groupIndex / 2) * 1.1)).add(right.scale(side)).add(0, 1.7 + Math.abs(Math.sin(tickCount * 0.4)) * 0.15, 0);
+            targetPos = player.position().add(back.scale(1.6 + (groupIndex / 2) * 1.1)).add(right.scale(side)).add(0, 1.7 + Math.abs(Math.sin(tickCount * 0.30)) * 0.15, 0);
             targetYaw = player.getYRot();
+            moveLerp = 0.065;
         } else if (roamEnabled && mode != FamiliarMode.FOLLOW) {
-            // Expanded 22-block autonomous exploration radius!
             double distFromOwner = currentSkullPos.distanceTo(player.position());
             if (distFromOwner > 23.5 || roamGoal == null || roamGoal.distanceTo(player.position()) > 22.5) {
                 roamGoal = WorldScout.pickInterestingRoamTarget(level, player, currentSkullPos);
@@ -632,28 +630,28 @@ public class Familiar {
             }
 
             double distToGoal = currentSkullPos.distanceTo(roamGoal);
-            if (distToGoal < 0.55) {
+            if (distToGoal < 0.65) {
                 if (roamPauseTicks <= 0) {
-                    roamPauseTicks = 30 + rng.nextInt(40);
+                    roamPauseTicks = 60 + rng.nextInt(75);
                 }
                 roamPauseTicks--;
                 if (roamPauseTicks <= 0) {
                     roamGoal = WorldScout.pickInterestingRoamTarget(level, player, currentSkullPos);
                 }
-                targetPos = roamGoal.add(0, Math.sin((tickCount + index * 13) * 0.12) * 0.14, 0);
+                targetPos = roamGoal.add(0, Math.sin((tickCount + index * 13) * 0.08) * 0.14, 0);
                 if (hiveFocus != null) {
                     targetYaw = yawBetween(currentSkullPos, hiveFocus);
                     targetPitch = pitchBetween(currentSkullPos, hiveFocus);
                 } else {
-                    targetYaw = yawBetween(currentSkullPos, roamGoal) + Mth.sin(tickCount * 0.07f) * 45.0f;
-                    targetPitch = 14.0f + Mth.cos(tickCount * 0.09f) * 10.0f;
+                    targetYaw = yawBetween(currentSkullPos, roamGoal) + Mth.sin(tickCount * 0.045f) * 40.0f;
+                    targetPitch = 12.0f + Mth.cos(tickCount * 0.06f) * 9.0f;
                 }
-                moveLerp = 0.075;
+                moveLerp = 0.028;
             } else {
                 targetPos = roamGoal;
                 targetYaw = yawBetween(currentSkullPos, roamGoal);
                 targetPitch = pitchBetween(currentSkullPos, roamGoal);
-                moveLerp = 0.068;
+                moveLerp = 0.022;
             }
         }
 
@@ -661,18 +659,18 @@ public class Familiar {
             targetPitch = 42.0f;
             if (--actionTimer <= 0) mode = FamiliarMode.IDLE;
         } else if (mode == FamiliarMode.NOD) {
-            targetPitch = Mth.sin(tickCount * 0.65f) * 28.0f;
+            targetPitch = Mth.sin(tickCount * 0.55f) * 26.0f;
             if (--actionTimer <= 0) mode = FamiliarMode.IDLE;
         } else if (mode == FamiliarMode.SHAKE_HEAD) {
-            targetYaw += Mth.sin(tickCount * 0.65f) * 35.0f;
+            targetYaw += Mth.sin(tickCount * 0.55f) * 32.0f;
             if (--actionTimer <= 0) mode = FamiliarMode.IDLE;
         } else if (startleTicks > 0) {
-            targetPos = targetPos.add((rng.nextDouble() - 0.5) * 0.15, 0.1, (rng.nextDouble() - 0.5) * 0.15);
+            targetPos = targetPos.add((rng.nextDouble() - 0.5) * 0.12, 0.08, (rng.nextDouble() - 0.5) * 0.12);
         }
 
         currentSkullPos = currentSkullPos.lerp(targetPos, moveLerp);
-        currentSkullYaw = rotLerp(0.18f, currentSkullYaw, targetYaw);
-        currentSkullPitch = Mth.lerp(0.18f, currentSkullPitch, targetPitch);
+        currentSkullYaw = rotLerp(0.09f, currentSkullYaw, targetYaw);
+        currentSkullPitch = Mth.lerp(0.09f, currentSkullPitch, targetPitch);
 
         if (etherealVisual == null || !etherealVisual.isAlive() || etherealVisual.level() != level) {
             etherealVisual = new ArmorStand(level, currentSkullPos.x, currentSkullPos.y - 1.45, currentSkullPos.z);
@@ -684,7 +682,6 @@ public class Familiar {
             level.addEntity(etherealVisual);
         }
 
-        // Update previous-tick coordinates so client rendering interpolates smoothly at high FPS
         etherealVisual.xo = etherealVisual.getX();
         etherealVisual.yo = etherealVisual.getY();
         etherealVisual.zo = etherealVisual.getZ();
@@ -697,14 +694,14 @@ public class Familiar {
         etherealVisual.setYHeadRot(currentSkullYaw);
         etherealVisual.setHeadPose(new Rotations(currentSkullPitch, 0.0f, 0.0f));
 
-        if (tickCount % 3 == 0) {
-            double px = currentSkullPos.x + (rng.nextDouble() - 0.5) * 0.32;
-            double py = currentSkullPos.y + (rng.nextDouble() - 0.5) * 0.25;
-            double pz = currentSkullPos.z + (rng.nextDouble() - 0.5) * 0.32;
-            level.addParticle(ParticleTypes.SOUL, px, py, pz, 0.0, 0.025, 0.0);
+        if (tickCount % 4 == 0) {
+            double px = currentSkullPos.x + (rng.nextDouble() - 0.5) * 0.30;
+            double py = currentSkullPos.y + (rng.nextDouble() - 0.5) * 0.22;
+            double pz = currentSkullPos.z + (rng.nextDouble() - 0.5) * 0.30;
+            level.addParticle(ParticleTypes.SOUL, px, py, pz, 0.0, 0.02, 0.0);
         }
-        if (tickCount % 11 == 0) {
-            level.addParticle(ParticleTypes.SOUL_FIRE_FLAME, currentSkullPos.x, currentSkullPos.y - 0.1, currentSkullPos.z, 0.0, 0.015, 0.0);
+        if (tickCount % 14 == 0) {
+            level.addParticle(ParticleTypes.SOUL_FIRE_FLAME, currentSkullPos.x, currentSkullPos.y - 0.1, currentSkullPos.z, 0.0, 0.012, 0.0);
         }
     }
 

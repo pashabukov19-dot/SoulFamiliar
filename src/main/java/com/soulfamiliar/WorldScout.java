@@ -37,6 +37,64 @@ public final class WorldScout {
 
     public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
 
+    /**
+     * Compact situation summary passed to Groq AI so the familiar understands the world around the Master.
+     */
+    public static String buildCompactAiWorldSummary(ClientLevel level, LocalPlayer owner, Familiar speaker, long currentTick) {
+        if (level == null || owner == null) return "Неизвестная местность.";
+        List<String> facts = new ArrayList<>();
+
+        String dimName = "Верхний мир";
+        if (level.dimension() == Level.NETHER) dimName = "Нижний мир (Незер)";
+        else if (level.dimension() == Level.END) dimName = "Край (Энд)";
+
+        BlockPos bp = owner.blockPosition();
+        facts.add("Измерение: " + dimName + ", высота Y=" + bp.getY());
+        facts.add("Здоровье Повелителя: " + (int) Math.ceil(owner.getHealth()) + "/" + (int) Math.ceil(owner.getMaxHealth()));
+        if (level.isThundering()) facts.add("Погода: гроза");
+        else if (level.isRaining()) facts.add("Погода: дождь");
+
+        if (!owner.getMainHandItem().isEmpty()) {
+            facts.add("В руке Повелителя: " + owner.getMainHandItem().getHoverName().getString());
+        }
+
+        // Nearby players
+        List<String> nearPlayers = new ArrayList<>();
+        for (Player p : level.players()) {
+            if (p != owner && p.isAlive() && p.distanceToSqr(owner) <= 900.0) {
+                int dist = (int) Math.round(p.distanceTo(owner));
+                nearPlayers.add(p.getName().getString() + " (" + dist + " бл.)");
+            }
+        }
+        if (!nearPlayers.isEmpty()) {
+            facts.add("Игроки рядом: " + String.join(", ", nearPlayers));
+        }
+
+        // Nearest entity
+        List<Entity> mobs = level.getEntities(owner, owner.getBoundingBox().inflate(16.0), e ->
+                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
+        );
+        if (!mobs.isEmpty()) {
+            mobs.sort(Comparator.comparingDouble(e -> e.distanceToSqr(owner)));
+            Entity nearest = mobs.get(0);
+            facts.add("Ближайшее существо: " + nearest.getName().getString() + " (" + (int) Math.round(nearest.distanceTo(owner)) + " бл.)");
+        }
+
+        // Recent discoveries in soul memory
+        List<HiveMemory.MemoryEntry> recent = HiveMemory.getInstance().getRecentEntries(currentTick, 3);
+        if (!recent.isEmpty()) {
+            List<String> memNotes = new ArrayList<>();
+            for (HiveMemory.MemoryEntry e : recent) {
+                int dist = (int) Math.round(owner.getEyePosition().distanceTo(e.pos()));
+                memNotes.add(e.label() + " (" + dist + " бл. " + relativeDirection(owner, e.pos()) + ")");
+            }
+            facts.add("Недавние находки духов: " + String.join(", ", memNotes));
+        }
+
+        facts.add("Облик духа " + speaker.getName() + ": " + (speaker.isBound() ? "вселён в стойку для брони" : "парящий череп"));
+        return String.join("; ", facts) + ".";
+    }
+
     public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
         if (level == null || owner == null) return null;
 
@@ -61,7 +119,7 @@ public final class WorldScout {
             }
         }
 
-        // 2. Expanded scan radius (10 blocks around the roaming familiar -> up to ~32 blocks from Master!)
+        // 2. Scan radius around the roaming familiar (10 blocks) for genuinely high-value loot/ores
         BlockPos center = BlockPos.containing(origin);
         int r = 10;
         for (int dx = -r; dx <= r; dx++) {
@@ -92,25 +150,17 @@ public final class WorldScout {
         return null;
     }
 
-    /**
-     * Detailed report of what a familiar sees around its position and directly in front of its gaze.
-     */
     public static String describeDetailedFamiliarSight(ClientLevel level, LocalPlayer owner, Familiar familiar, Vec3 eyeOrigin, float yaw, float pitch, long currentTick) {
         if (level == null || owner == null) return "Вокруг лишь пустота, Повелитель.";
 
         List<String> sections = new ArrayList<>();
 
-        // 1. Atmosphere / weather / dimension
-        sections.add(describeEnvironment(level, eyeOrigin));
-
-        // 2. Direct gaze raycast from the familiar
         Vec3 lookVec = directionFromYawPitch(yaw, pitch);
         String directSight = inspectRay(level, owner, eyeOrigin, lookVec, 18.0);
         if (directSight != null) {
             sections.add("Прямо перед моим взором — " + directSight);
         }
 
-        // 3. Detailed nearby players within 22 blocks
         List<Player> players = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 484.0) {
@@ -131,7 +181,6 @@ public final class WorldScout {
             sections.add("Игроки поблизости: " + String.join(", ", pDetails));
         }
 
-        // 4. Detailed nearby creatures/mobs within 18 blocks
         List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(18.0), e ->
                 e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
         );
@@ -151,7 +200,6 @@ public final class WorldScout {
             }
         }
 
-        // 5. Notable blocks & ores within 14 blocks (and record them into HiveMemory!)
         Map<String, Integer> blockCounts = new LinkedHashMap<>();
         BlockPos center = BlockPos.containing(eyeOrigin);
         int r = 13;
@@ -181,16 +229,15 @@ public final class WorldScout {
                 blockNotes.add(entry.getKey() + " (" + entry.getValue() + " шт.)");
             }
             sections.add("Ценные находки в радиусе: " + String.join(", ", blockNotes));
-        } else {
-            sections.add("Ценных руд или тайников в этом секторе не обнаружено");
+        }
+
+        if (sections.isEmpty()) {
+            return "Вокруг тихо и безлюдно — ни ценных залежей, ни живых душ поблизости не видно.";
         }
 
         return String.join(". ", sections) + ".";
     }
 
-    /**
-     * Detailed description of what the MASTER is directly looking at!
-     */
     public static String describePlayerGaze(ClientLevel level, LocalPlayer owner, double range) {
         if (level == null || owner == null) return "Я не могу заглянуть в ваш взор сейчас, Повелитель.";
         Vec3 eye = owner.getEyePosition();
@@ -198,7 +245,7 @@ public final class WorldScout {
         String sight = inspectRay(level, owner, eye, look, range);
         String cardinal = cardinalDirectionFromYaw(owner.getYRot());
         if (sight == null) {
-            return "Вы устремили взор на " + cardinal + " в пустое пространство (в пределах " + (int) range + " бл. препятствий нет). " + describeEnvironment(level, eye) + ".";
+            return "Вы устремили взор на " + cardinal + " в открытое пространство (в пределах " + (int) range + " бл. препятствий нет).";
         }
         return "Ваш взор направлен на " + cardinal + ": перед вами " + sight + ".";
     }
@@ -253,32 +300,17 @@ public final class WorldScout {
         return null;
     }
 
-    private static String describeEnvironment(ClientLevel level, Vec3 pos) {
-        if (level.dimension() == Level.NETHER) {
-            return "Вокруг пылающие своды Нижнего мира";
-        }
-        if (level.dimension() == Level.END) {
-            return "Вокруг бездна и сумрак Края";
-        }
-        String weatherStr = level.isThundering() ? ", гремит гроза" : (level.isRaining() ? ", идёт дождь" : "");
-        BlockPos bp = BlockPos.containing(pos);
-        String depthStr = (!level.canSeeSky(bp) && bp.getY() < 55) ? ", подземелье (высота Y=" + bp.getY() + ")" : "";
-        return "Мы находимся в Верхнем мире" + weatherStr + depthStr;
-    }
-
     public static SearchResult locateTarget(ClientLevel level, LocalPlayer owner, Vec3 searchOrigin, String rawQuery, long currentTick) {
         if (level == null || owner == null || rawQuery == null) return null;
         String q = rawQuery.toLowerCase(Locale.ROOT).replace("?", "").replace("!", "").trim();
         if (q.isEmpty()) return null;
 
-        // 1. Check HiveMind shared memory first!
         HiveMemory.MemoryEntry mem = HiveMemory.getInstance().searchMemory(q, owner.position(), currentTick);
         if (mem != null) {
             double dist = owner.getEyePosition().distanceTo(mem.pos());
             return new SearchResult(mem.label(), mem.pos(), dist, relativeDirection(owner, mem.pos()), mem.discoveredBy());
         }
 
-        // 2. Search players within 45 blocks
         Player bestPlayer = null;
         double bestPlayerDist = 45.0 * 45.0;
         for (Player p : level.players()) {
@@ -297,7 +329,6 @@ public final class WorldScout {
             return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()), null);
         }
 
-        // 3. Search entities/mobs within 36 blocks
         String entityHint = mapRussianEntityHint(q);
         Entity bestEntity = null;
         double bestEntityDist = 36.0 * 36.0;
@@ -321,7 +352,6 @@ public final class WorldScout {
             return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()), null);
         }
 
-        // 4. Search blocks within 28 blocks around the familiar
         BlockPos center = BlockPos.containing(searchOrigin);
         BlockPos bestBlockPos = null;
         String bestBlockLabel = null;
@@ -386,9 +416,6 @@ public final class WorldScout {
         return best;
     }
 
-    /**
-     * Expanded 22-block autonomous exploration radius around the Master!
-     */
     public static Vec3 pickInterestingRoamTarget(ClientLevel level, LocalPlayer owner, Vec3 currentPos) {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
         if (level == null || owner == null) return currentPos;
@@ -413,7 +440,7 @@ public final class WorldScout {
 
         for (int attempt = 0; attempt < 16; attempt++) {
             double angle = rng.nextDouble() * Math.PI * 2.0;
-            double radius = 3.5 + rng.nextDouble() * 18.0; // up to 21.5 blocks away
+            double radius = 3.5 + rng.nextDouble() * 18.0;
             double tx = owner.getX() + Math.cos(angle) * radius;
             double ty = owner.getY() + 0.8 + rng.nextDouble() * 5.0;
             double tz = owner.getZ() + Math.sin(angle) * radius;

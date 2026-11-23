@@ -39,7 +39,7 @@ public final class HiveMemory {
     }
 
     public void purgeOld(long currentTick) {
-        sharedEntries.entrySet().removeIf(e -> (currentTick - e.getValue().tick()) > 4800);
+        sharedEntries.entrySet().removeIf(e -> (currentTick - e.getValue().tick()) > 6000);
         if (currentTick > sharedFocusUntilTick) {
             sharedFocusPos = null;
         }
@@ -48,14 +48,13 @@ public final class HiveMemory {
     public boolean recordDiscovery(String uniqueKey, String label, Vec3 pos, String familiarName, long currentTick, boolean isDanger) {
         purgeOld(currentTick);
         MemoryEntry existing = sharedEntries.get(uniqueKey);
-        if (existing != null && (currentTick - existing.tick()) < 2400) {
-            // Update position if it's a moving entity, without re-announcing
+        if (existing != null && (currentTick - existing.tick()) < 3600) {
             sharedEntries.put(uniqueKey, new MemoryEntry(uniqueKey, label, pos, existing.discoveredBy(), existing.tick(), isDanger));
             return false;
         }
         sharedEntries.put(uniqueKey, new MemoryEntry(uniqueKey, label, pos, familiarName, currentTick, isDanger));
         this.sharedFocusPos = pos;
-        this.sharedFocusUntilTick = currentTick + 100;
+        this.sharedFocusUntilTick = currentTick + 120;
         this.lastScoutName = familiarName;
         return true;
     }
