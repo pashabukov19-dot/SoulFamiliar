@@ -12,16 +12,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.9.0'
-      - name: Check 26.3 Method Signatures
-        run: |
-          gradle dependencies --configuration compileClasspath > /dev/null
-          MC_JAR=$(find ~/.gradle -name "*minecraft*26.3*.jar" | head -n 1)
-          FAPI_JAR=$(find ~/.gradle -name "*fabric-key-mapping-api*.jar" | head -n 1)
-          echo "=== LOCAL PLAYER CHAT ==="
-          javap -cp "$MC_JAR" net.minecraft.client.player.LocalPlayer | grep -E "Message|Chat"
-          echo "=== INPUT CONSTANTS ==="
-          javap -cp "$MC_JAR" com.mojang.blaze3d.platform.InputConstants 'com.mojang.blaze3d.platform.InputConstants$Type' | head -n 35
-          echo "=== KEY MAPPING ==="
-          javap -cp "$MC_JAR" net.minecraft.client.KeyMapping | head -n 25
-          echo "=== FABRIC KEY MAPPING HELPER ==="
-          javap -cp "$FAPI_JAR" net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
+      - name: Build Mod JAR
+        run: gradle build
+      - name: Upload Mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoulFamiliar-Mod-26.3
+          path: build/libs/SoulFamiliar-26.3-*.jar
