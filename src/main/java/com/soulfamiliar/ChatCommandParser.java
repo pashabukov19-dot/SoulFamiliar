@@ -13,9 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class ChatCommandParser {
-    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\b([a-hA-H][1-8])\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\s*([a-hA-H][1-8])\b");
-    private static final Pattern LOCATE_PATTERN = Pattern.compile("(?:где|найди|поищи|отыщи)\s+(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern STALK_PATTERN = Pattern.compile("(?:преследуй|следи за|выследи)\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern CHESS_MOVE_PATTERN = Pattern.compile("\\b([a-hA-H][1-8])\\s*(?:на|в|->|-|бь[её]т|рубит|x|х)\\s*([a-hA-H][1-8])\\b");
+    private static final Pattern LOCATE_PATTERN = Pattern.compile("(?:где|найди|поищи|отыщи)\\s+(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern STALK_PATTERN = Pattern.compile("(?:преследуй|следи за|выследи)\\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private ChatCommandParser() {}
 
@@ -294,8 +294,8 @@ public final class ChatCommandParser {
     }
 
     private static String extractName(String tail) {
-        String cleaned = tail.replaceAll("[^\p{L}\p{N}_-]", " ").trim();
+        String cleaned = tail.replaceAll("[^\\p{L}\\p{N}_-]", " ").trim();
         if (cleaned.isEmpty()) return "";
-        return cleaned.split("\s+")[0];
+        return cleaned.split("\\s+")[0];
     }
 }
