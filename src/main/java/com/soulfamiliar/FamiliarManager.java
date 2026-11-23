@@ -79,7 +79,7 @@ public class FamiliarManager {
 
         client.level.playLocalSound(
                 client.player.getX(), client.player.getY(), client.player.getZ(),
-                SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 1.0f, 0.75f, false
+                SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.0f, 0.75f, false
         );
         notifyPlayer(client, "Дух «" + cleanName + "» откликнулся на зов и парит у твоего плеча.", ChatFormatting.AQUA);
     }
@@ -298,10 +298,9 @@ public class FamiliarManager {
 
     public static void notifyPlayer(Minecraft client, String text, ChatFormatting color) {
         if (client.player != null) {
-            client.player.displayClientMessage(
+            client.player.sendSystemMessage(
                     Component.literal("[Фамильяр] ").withStyle(ChatFormatting.DARK_AQUA)
-                            .append(Component.literal(text).withStyle(color)),
-                    false
+                            .append(Component.literal(text).withStyle(color))
             );
         }
     }
