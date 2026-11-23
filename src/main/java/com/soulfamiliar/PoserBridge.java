@@ -35,7 +35,7 @@ public final class PoserBridge {
         poseTag.put("RightLeg", floatList(pose.rightLegX, pose.rightLegY, pose.rightLegZ));
         tag.put("Pose", poseTag);
 
-        if (moveDelta != null && moveDelta.lengthSqr() > 1.0E-6) {
+        if (moveDelta != null && moveDelta.lengthSqr() > 1.0E-7) {
             double dx = clampMove(moveDelta.x);
             double dy = clampMove(moveDelta.y);
             double dz = clampMove(moveDelta.z);
@@ -56,7 +56,7 @@ public final class PoserBridge {
             rotList.add(FloatTag.valueOf(0.0f));
             tag.put("Rotation", rotList);
         }
-        if (moveDelta != null && moveDelta.lengthSqr() > 1.0E-6) {
+        if (moveDelta != null && moveDelta.lengthSqr() > 1.0E-7) {
             tag.store("Move", Vec3.CODEC, new Vec3(
                     clampMove(moveDelta.x),
                     clampMove(moveDelta.y),

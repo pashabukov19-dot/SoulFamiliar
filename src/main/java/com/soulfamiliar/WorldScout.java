@@ -4,13 +4,22 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -24,15 +33,15 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class WorldScout {
     private WorldScout() {}
 
-    public record SearchResult(String label, Vec3 pos, double distance, String direction) {}
+    public record SearchResult(String label, Vec3 pos, double distance, String direction, String fromMemoryScout) {}
 
     public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
 
     public static Discovery scanForInitiative(ClientLevel level, LocalPlayer owner, Vec3 origin) {
         if (level == null || owner == null) return null;
 
-        // 1. Check immediate danger sneaking behind or near owner (within 8.5 blocks)
-        List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(8.5), e ->
+        // 1. Immediate threats near owner (within 10 blocks)
+        List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
                 e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
         );
         for (Entity e : threats) {
@@ -43,18 +52,18 @@ public final class WorldScout {
                 return new Discovery("entity:" + e.getUUID(), "эндермен", e.getEyePosition(), true);
             }
             if (e instanceof Player p) {
-                if (p.isShiftKeyDown() || p.distanceToSqr(owner) < 25.0) {
+                if (p.isShiftKeyDown() || p.distanceToSqr(owner) < 36.0) {
                     return new Discovery("player:" + p.getUUID(), "игрок " + p.getName().getString(), p.getEyePosition(), p.isShiftKeyDown());
                 }
             }
-            if (e instanceof Enemy && e.distanceToSqr(owner) < 36.0) {
+            if (e instanceof Enemy && e.distanceToSqr(owner) < 49.0) {
                 return new Discovery("entity:" + e.getUUID(), e.getName().getString(), e.getEyePosition(), true);
             }
         }
 
-        // 2. Scan around the familiar's current position (radius 6) for high-value loot/ores
+        // 2. Expanded scan radius (10 blocks around the roaming familiar -> up to ~32 blocks from Master!)
         BlockPos center = BlockPos.containing(origin);
-        int r = 6;
+        int r = 10;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
@@ -83,54 +92,82 @@ public final class WorldScout {
         return null;
     }
 
-    public static String describeSurroundings(ClientLevel level, LocalPlayer owner, Vec3 eyeOrigin) {
-        if (level == null || owner == null) return "Вокруг пустота.";
+    /**
+     * Detailed report of what a familiar sees around its position and directly in front of its gaze.
+     */
+    public static String describeDetailedFamiliarSight(ClientLevel level, LocalPlayer owner, Familiar familiar, Vec3 eyeOrigin, float yaw, float pitch, long currentTick) {
+        if (level == null || owner == null) return "Вокруг лишь пустота, Повелитель.";
 
-        List<String> parts = new ArrayList<>();
+        List<String> sections = new ArrayList<>();
 
+        // 1. Atmosphere / time / dimension
+        sections.add(describeEnvironment(level, eyeOrigin));
+
+        // 2. Direct gaze raycast from the familiar
+        Vec3 lookVec = directionFromYawPitch(yaw, pitch);
+        String directSight = inspectRay(level, owner, eyeOrigin, lookVec, 18.0);
+        if (directSight != null) {
+            sections.add("Прямо перед моим взором — " + directSight);
+        }
+
+        // 3. Detailed nearby players within 22 blocks
         List<Player> players = new ArrayList<>();
         for (Player p : level.players()) {
-            if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 196.0) {
+            if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 484.0) {
                 players.add(p);
             }
         }
         if (!players.isEmpty()) {
             players.sort(Comparator.comparingDouble(p -> p.position().distanceToSqr(eyeOrigin)));
-            Player closest = players.get(0);
-            int dist = (int) Math.round(Math.sqrt(closest.position().distanceToSqr(eyeOrigin)));
-            String dir = relativeDirection(owner, closest.position());
-            if (players.size() == 1) {
-                parts.add("игрок " + closest.getName().getString() + " (" + dist + " бл., " + dir + ")");
-            } else {
-                parts.add(players.size() + " игрок(а), ближайший " + closest.getName().getString() + " (" + dist + " бл., " + dir + ")");
+            List<String> pDetails = new ArrayList<>();
+            for (int i = 0; i < Math.min(3, players.size()); i++) {
+                Player p = players.get(i);
+                int dist = (int) Math.round(Math.sqrt(p.position().distanceToSqr(owner.position())));
+                String dir = relativeDirection(owner, p.position());
+                String itemNote = p.getMainHandItem().isEmpty() ? "с пустыми руками" : "держит " + p.getMainHandItem().getHoverName().getString();
+                String sneakNote = p.isShiftKeyDown() ? ", крадётся" : "";
+                pDetails.add(p.getName().getString() + " (" + dist + " бл. " + dir + ", " + itemNote + sneakNote + ")");
             }
+            sections.add("Игроки поблизости: " + String.join(", ", pDetails));
         }
 
-        List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(14.0), e ->
+        // 4. Detailed nearby creatures/mobs within 18 blocks
+        List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(18.0), e ->
                 e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
         );
         if (!mobs.isEmpty()) {
             mobs.sort(Comparator.comparingDouble(e -> e.position().distanceToSqr(eyeOrigin)));
-            Entity nearestMob = mobs.get(0);
-            int dist = (int) Math.round(Math.sqrt(nearestMob.position().distanceToSqr(eyeOrigin)));
-            String mobName = nearestMob.getName().getString();
+            Entity nearest = mobs.get(0);
+            int dist = (int) Math.round(Math.sqrt(nearest.position().distanceToSqr(owner.position())));
+            String dir = relativeDirection(owner, nearest.position());
+            String hpInfo = "";
+            if (nearest instanceof LivingEntity le) {
+                hpInfo = ", ОЗ: " + (int) Math.ceil(le.getHealth()) + "/" + (int) Math.ceil(le.getMaxHealth());
+            }
             if (mobs.size() == 1) {
-                parts.add(mobName + " (" + dist + " бл.)");
+                sections.add("Существо рядом: " + nearest.getName().getString() + " (" + dist + " бл. " + dir + hpInfo + ")");
             } else {
-                parts.add(mobs.size() + " существ (ближайшее: " + mobName + ", " + dist + " бл.)");
+                sections.add("Существ вокруг: " + mobs.size() + " (ближайшее — " + nearest.getName().getString() + ", " + dist + " бл. " + dir + hpInfo + ")");
             }
         }
 
+        // 5. Notable blocks & ores within 14 blocks (and record them into HiveMemory!)
         Map<String, Integer> blockCounts = new LinkedHashMap<>();
         BlockPos center = BlockPos.containing(eyeOrigin);
-        int r = 9;
+        int r = 13;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
                     BlockPos bp = center.offset(dx, dy, dz);
-                    String label = classifyNotableBlock(level.getBlockState(bp));
+                    BlockState state = level.getBlockState(bp);
+                    String label = classifyNotableBlock(state);
                     if (label != null) {
                         blockCounts.merge(label, 1, Integer::sum);
+                        String high = classifyHighValueDiscovery(state);
+                        if (high != null) {
+                            String sectorKey = high + ":" + (bp.getX() >> 2) + ":" + (bp.getY() >> 2) + ":" + (bp.getZ() >> 2);
+                            HiveMemory.getInstance().recordDiscovery(sectorKey, high, Vec3.atCenterOf(bp), familiar.getName(), currentTick, false);
+                        }
                     }
                 }
             }
@@ -140,25 +177,118 @@ public final class WorldScout {
             List<String> blockNotes = new ArrayList<>();
             int shown = 0;
             for (Map.Entry<String, Integer> entry : blockCounts.entrySet()) {
-                if (shown++ >= 4) break;
-                blockNotes.add(entry.getKey() + " ×" + entry.getValue());
+                if (shown++ >= 5) break;
+                blockNotes.add(entry.getKey() + " (" + entry.getValue() + " шт.)");
             }
-            parts.add("из интересного: " + String.join(", ", blockNotes));
+            sections.add("Ценные находки в радиусе: " + String.join(", ", blockNotes));
+        } else {
+            sections.add("Ценных руд или тайников в этом секторе не обнаружено");
         }
 
-        if (parts.isEmpty()) {
-            return "Тишина и уныние: ни сундуков, ни алмазов, ни даже приличного зомби поблизости.";
-        }
-        return "Докладываю: " + String.join("; ", parts) + ".";
+        return String.join(". ", sections) + ".";
     }
 
-    public static SearchResult locateTarget(ClientLevel level, LocalPlayer owner, Vec3 searchOrigin, String rawQuery) {
+    /**
+     * Detailed description of what the MASTER is directly looking at!
+     */
+    public static String describePlayerGaze(ClientLevel level, LocalPlayer owner, double range) {
+        if (level == null || owner == null) return "Я не могу заглянуть в ваш взор сейчас, Повелитель.";
+        Vec3 eye = owner.getEyePosition();
+        Vec3 look = owner.getLookAngle();
+        String sight = inspectRay(level, owner, eye, look, range);
+        String cardinal = cardinalDirectionFromYaw(owner.getYRot());
+        if (sight == null) {
+            return "Вы устремили взор на " + cardinal + " в пустое пространство (в пределах " + (int) range + " бл. препятствий нет). " + describeEnvironment(level, eye) + ".";
+        }
+        return "Ваш взор направлен на " + cardinal + ": перед вами " + sight + ".";
+    }
+
+    private static String inspectRay(ClientLevel level, LocalPlayer owner, Vec3 origin, Vec3 dir, double range) {
+        Vec3 normDir = dir.normalize();
+        Vec3 end = origin.add(normDir.scale(range));
+
+        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(
+                owner, origin, end,
+                new AABB(origin, end).inflate(1.0),
+                e -> e != owner && e.isAlive(),
+                range * range
+        );
+
+        BlockHitResult blockHit = level.clip(new ClipContext(
+                origin, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, owner
+        ));
+
+        double entityDistSq = entityHit != null ? origin.distanceToSqr(entityHit.getLocation()) : Double.MAX_VALUE;
+        double blockDistSq = blockHit.getType() != HitResult.Type.MISS ? origin.distanceToSqr(blockHit.getLocation()) : Double.MAX_VALUE;
+
+        if (entityHit != null && entityDistSq <= blockDistSq) {
+            Entity target = entityHit.getEntity();
+            int dist = (int) Math.round(Math.sqrt(entityDistSq));
+            StringBuilder sb = new StringBuilder();
+            sb.append(target.getName().getString()).append(" (дистанция ").append(dist).append(" бл.");
+            if (target instanceof LivingEntity le) {
+                sb.append(", здоровье ").append((int) Math.ceil(le.getHealth())).append("/").append((int) Math.ceil(le.getMaxHealth()));
+                ItemStack mainHand = le.getMainHandItem();
+                if (!mainHand.isEmpty()) {
+                    sb.append(", в руке: ").append(mainHand.getHoverName().getString());
+                }
+                if (le.isOnFire()) sb.append(", объят пламенем");
+                if (le.isShiftKeyDown()) sb.append(", крадётся");
+            }
+            sb.append(")");
+            return sb.toString();
+        }
+
+        if (blockHit.getType() != HitResult.Type.MISS) {
+            BlockPos bp = blockHit.getBlockPos();
+            BlockState state = level.getBlockState(bp);
+            Block block = state.getBlock();
+            int dist = (int) Math.round(Math.sqrt(blockDistSq));
+            String blockName = block.getName().getString();
+            String notable = classifyNotableBlock(state);
+            String extra = notable != null ? " — примечательный объект!" : "";
+            return "блок «" + blockName + "» на расстоянии " + dist + " бл. (координаты: " + bp.getX() + ", " + bp.getY() + ", " + bp.getZ() + ")" + extra;
+        }
+
+        return null;
+    }
+
+    private static String describeEnvironment(ClientLevel level, Vec3 pos) {
+        if (level.dimension() == Level.NETHER) {
+            return "Вокруг пылающие своды Нижнего мира";
+        }
+        if (level.dimension() == Level.END) {
+            return "Вокруг бездна и сумрак Края";
+        }
+        long timeOfDay = level.getDayTime() % 24000L;
+        String timeStr;
+        if (timeOfDay < 1000) timeStr = "раннее утро";
+        else if (timeOfDay < 11500) timeStr = "ясный день";
+        else if (timeOfDay < 13500) timeStr = "закат";
+        else if (timeOfDay < 22500) timeStr = "глубокая ночь";
+        else timeStr = "рассвет";
+
+        String weatherStr = level.isThundering() ? ", гремит гроза" : (level.isRaining() ? ", идёт дождь" : "");
+        BlockPos bp = BlockPos.containing(pos);
+        String depthStr = (!level.canSeeSky(bp) && bp.getY() < 55) ? ", подземелье (высота Y=" + bp.getY() + ")" : "";
+        return "Сейчас " + timeStr + weatherStr + depthStr;
+    }
+
+    public static SearchResult locateTarget(ClientLevel level, LocalPlayer owner, Vec3 searchOrigin, String rawQuery, long currentTick) {
         if (level == null || owner == null || rawQuery == null) return null;
         String q = rawQuery.toLowerCase(Locale.ROOT).replace("?", "").replace("!", "").trim();
         if (q.isEmpty()) return null;
 
+        // 1. Check HiveMind shared memory first!
+        HiveMemory.MemoryEntry mem = HiveMemory.getInstance().searchMemory(q, owner.position(), currentTick);
+        if (mem != null) {
+            double dist = owner.getEyePosition().distanceTo(mem.pos());
+            return new SearchResult(mem.label(), mem.pos(), dist, relativeDirection(owner, mem.pos()), mem.discoveredBy());
+        }
+
+        // 2. Search players within 45 blocks
         Player bestPlayer = null;
-        double bestPlayerDist = 32.0 * 32.0;
+        double bestPlayerDist = 45.0 * 45.0;
         for (Player p : level.players()) {
             if (p == owner || !p.isAlive()) continue;
             String nick = p.getName().getString().toLowerCase(Locale.ROOT);
@@ -171,14 +301,15 @@ public final class WorldScout {
             }
         }
         if (bestPlayer != null) {
-            double dist = Math.sqrt(bestPlayerDist);
-            return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()));
+            double dist = owner.getEyePosition().distanceTo(bestPlayer.getEyePosition());
+            return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()), null);
         }
 
+        // 3. Search entities/mobs within 36 blocks
         String entityHint = mapRussianEntityHint(q);
         Entity bestEntity = null;
-        double bestEntityDist = 26.0 * 26.0;
-        for (Entity e : level.getEntities(owner, new AABB(searchOrigin, searchOrigin).inflate(26.0), ent ->
+        double bestEntityDist = 36.0 * 36.0;
+        for (Entity e : level.getEntities(owner, new AABB(searchOrigin, searchOrigin).inflate(36.0), ent ->
                 ent.isAlive() && ent != owner && !(ent instanceof ArmorStand)
         )) {
             String eName = e.getName().getString().toLowerCase(Locale.ROOT);
@@ -194,16 +325,17 @@ public final class WorldScout {
             }
         }
         if (bestEntity != null) {
-            double dist = Math.sqrt(bestEntityDist);
-            return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()));
+            double dist = owner.getEyePosition().distanceTo(bestEntity.getEyePosition());
+            return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()), null);
         }
 
+        // 4. Search blocks within 28 blocks around the familiar
         BlockPos center = BlockPos.containing(searchOrigin);
         BlockPos bestBlockPos = null;
         String bestBlockLabel = null;
-        double bestBlockDist = 21.0 * 21.0;
+        double bestBlockDist = 29.0 * 29.0;
 
-        int r = 20;
+        int r = 28;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
@@ -225,8 +357,8 @@ public final class WorldScout {
 
         if (bestBlockPos != null) {
             Vec3 pos = Vec3.atCenterOf(bestBlockPos);
-            double dist = Math.sqrt(bestBlockDist);
-            return new SearchResult(bestBlockLabel, pos, dist, relativeDirection(owner, pos));
+            double dist = owner.getEyePosition().distanceTo(pos);
+            return new SearchResult(bestBlockLabel, pos, dist, relativeDirection(owner, pos), null);
         }
 
         return null;
@@ -245,8 +377,8 @@ public final class WorldScout {
 
         String hint = mapRussianEntityHint(q);
         Entity best = null;
-        double bestDist = 24.0 * 24.0;
-        for (Entity e : level.getEntities(owner, new AABB(owner.position(), owner.position()).inflate(24.0), ent ->
+        double bestDist = 32.0 * 32.0;
+        for (Entity e : level.getEntities(owner, new AABB(owner.position(), owner.position()).inflate(32.0), ent ->
                 ent.isAlive() && ent != owner && !(ent instanceof ArmorStand)
         )) {
             String eName = e.getName().getString().toLowerCase(Locale.ROOT);
@@ -262,33 +394,36 @@ public final class WorldScout {
         return best;
     }
 
+    /**
+     * Expanded 22-block autonomous exploration radius around the Master!
+     */
     public static Vec3 pickInterestingRoamTarget(ClientLevel level, LocalPlayer owner, Vec3 currentPos) {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
         if (level == null || owner == null) return currentPos;
 
-        if (rng.nextDouble() < 0.5) {
-            List<Entity> nearby = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
+        if (rng.nextDouble() < 0.55) {
+            List<Entity> nearby = level.getEntities(owner, owner.getBoundingBox().inflate(20.0), e ->
                     e.isAlive() && e != owner && !(e instanceof ArmorStand)
             );
             if (!nearby.isEmpty()) {
                 Entity chosen = nearby.get(rng.nextInt(nearby.size()));
-                return chosen.getEyePosition().add((rng.nextDouble() - 0.5) * 1.4, 0.7, (rng.nextDouble() - 0.5) * 1.4);
+                return chosen.getEyePosition().add((rng.nextDouble() - 0.5) * 1.6, 0.85, (rng.nextDouble() - 0.5) * 1.6);
             }
 
             BlockPos base = owner.blockPosition();
-            for (int attempt = 0; attempt < 28; attempt++) {
-                BlockPos sample = base.offset(rng.nextInt(-9, 10), rng.nextInt(-3, 5), rng.nextInt(-9, 10));
+            for (int attempt = 0; attempt < 36; attempt++) {
+                BlockPos sample = base.offset(rng.nextInt(-20, 21), rng.nextInt(-6, 9), rng.nextInt(-20, 21));
                 if (classifyNotableBlock(level.getBlockState(sample)) != null) {
-                    return Vec3.atCenterOf(sample).add(0, 1.15, 0);
+                    return Vec3.atCenterOf(sample).add(0, 1.2, 0);
                 }
             }
         }
 
-        for (int attempt = 0; attempt < 12; attempt++) {
+        for (int attempt = 0; attempt < 16; attempt++) {
             double angle = rng.nextDouble() * Math.PI * 2.0;
-            double radius = 2.2 + rng.nextDouble() * 7.2;
+            double radius = 3.5 + rng.nextDouble() * 18.0; // up to 21.5 blocks away
             double tx = owner.getX() + Math.cos(angle) * radius;
-            double ty = owner.getY() + 0.8 + rng.nextDouble() * 3.2;
+            double ty = owner.getY() + 0.8 + rng.nextDouble() * 5.0;
             double tz = owner.getZ() + Math.sin(angle) * radius;
             BlockPos bp = BlockPos.containing(tx, ty, tz);
             if (level.getBlockState(bp).isAir()) {
@@ -296,15 +431,15 @@ public final class WorldScout {
             }
         }
 
-        return owner.position().add(1.5, 2.0, 1.5);
+        return owner.position().add(2.0, 2.2, 2.0);
     }
 
     public static String relativeDirection(LocalPlayer observer, Vec3 target) {
         Vec3 diff = target.subtract(observer.getEyePosition());
         double horizDist = Math.sqrt(diff.x * diff.x + diff.z * diff.z);
         if (horizDist < 1.2) {
-            if (diff.y > 1.5) return "прямо над тобой";
-            if (diff.y < -1.5) return "прямо под тобой";
+            if (diff.y > 1.5) return "прямо над вами";
+            if (diff.y < -1.5) return "прямо под вами";
             return "совсем рядом";
         }
 
@@ -320,6 +455,27 @@ public final class WorldScout {
         if (diff.y > 3.0) return horizDir + " и выше";
         if (diff.y < -3.0) return horizDir + " и ниже";
         return horizDir;
+    }
+
+    private static String cardinalDirectionFromYaw(float yaw) {
+        float norm = ((yaw % 360.0f) + 360.0f) % 360.0f;
+        if (norm >= 337.5 || norm < 22.5) return "юг";
+        if (norm < 67.5) return "юго-запад";
+        if (norm < 112.5) return "запад";
+        if (norm < 157.5) return "северо-запад";
+        if (norm < 202.5) return "север";
+        if (norm < 247.5) return "северо-восток";
+        if (norm < 292.5) return "восток";
+        return "юго-восток";
+    }
+
+    private static Vec3 directionFromYawPitch(float yaw, float pitch) {
+        float f = -yaw * ((float) Math.PI / 180.0F) - (float) Math.PI;
+        float f1 = -pitch * ((float) Math.PI / 180.0F);
+        double x = Math.sin(f) * Math.cos(f1);
+        double y = Math.sin(f1);
+        double z = Math.cos(f) * Math.cos(f1);
+        return new Vec3(x, y, z);
     }
 
     private static double wrapDegrees(double deg) {

@@ -81,7 +81,8 @@ public class FamiliarManager {
                 client.player.getX(), client.player.getY(), client.player.getZ(),
                 SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.0f, 0.75f, false
         );
-        familiar.speakToOwner(client, "Снова в мир смертных? Ладно, посмотрим, что тут у тебя интересного.");
+        String h = FamiliarDialogueEngine.randomHonorific();
+        familiar.speakToOwner(client, "Я услышал ваш зов, " + h + ". Подключаюсь к коллективному разуму и вылетаю на разведку!");
     }
 
     public void possessTargetStand(Minecraft client, String name) {
@@ -97,7 +98,8 @@ public class FamiliarManager {
             return;
         }
         f.bindToStand(client, target);
-        f.speakToOwner(client, "Деревянное тело... Зато теперь я могу драматично размахивать руками.");
+        String h = FamiliarDialogueEngine.randomHonorific();
+        f.speakToOwner(client, "Сосуд принят, " + h + ". Теперь я могу служить вам в телесной оболочке!");
     }
 
     public void releaseFamiliar(Minecraft client, String name) {
@@ -107,7 +109,8 @@ public class FamiliarManager {
             stopCameraPossession(client);
         }
         f.releaseStand(client);
-        f.speakToOwner(client, "Наконец-то снова невесомость. Никакой гравитации и скрипа досок.");
+        String h = FamiliarDialogueEngine.randomHonorific();
+        f.speakToOwner(client, "Повинуюсь, " + h + ". Я покинул оболочку и вновь свободен в эфире.");
     }
 
     public void dismissFamiliar(Minecraft client, String name) {
@@ -143,7 +146,7 @@ public class FamiliarManager {
         possessingFamiliarKey = f.getName().toLowerCase(Locale.ROOT);
         f.setMode(FamiliarMode.POSSESSED);
         client.setCameraEntity(stand);
-        notifyPlayer(client, "Ты смотришь глазами «" + f.getName() + "». Нажми [V] или напиши «Вернись», чтобы выйти.", ChatFormatting.LIGHT_PURPLE);
+        notifyPlayer(client, "Вы смотрите глазами «" + f.getName() + "», Повелитель. Нажмите [V] или напишите «Вернись», чтобы выйти.", ChatFormatting.LIGHT_PURPLE);
     }
 
     public void stopCameraPossession(Minecraft client) {
@@ -156,7 +159,7 @@ public class FamiliarManager {
                 f.setMode(FamiliarMode.IDLE);
             }
             possessingFamiliarKey = null;
-            notifyPlayer(client, "Зрение вернулось в твоё тело.", ChatFormatting.GRAY);
+            notifyPlayer(client, "Зрение возвращено в ваше тело, Повелитель.", ChatFormatting.GRAY);
         }
     }
 
@@ -188,7 +191,7 @@ public class FamiliarManager {
         if (possessingFamiliarKey != null) {
             Familiar active = familiars.get(possessingFamiliarKey);
             ArmorStand stand = active != null ? active.resolveBoundStand(client.level) : null;
-            if (stand == null || !stand.isAlive() || client.player.distanceToSqr(stand) > 169.0) {
+            if (stand == null || !stand.isAlive() || client.player.distanceToSqr(stand) > 256.0) {
                 stopCameraPossession(client);
             } else if (client.getCameraEntity() != stand) {
                 client.setCameraEntity(stand);
@@ -205,7 +208,8 @@ public class FamiliarManager {
             if (f.resolveBoundStand(client.level) == null) totalEthereal++;
         }
 
-        boolean packetWindow = !chessUsedPacket && (tickCounter % 2 == 0);
+        // Send 1 ArmorPoser update packet per tick (20 pkt/s) for 2x smoother stand animations!
+        boolean packetWindow = !chessUsedPacket;
         int chosenForPacket = -1;
         if (packetWindow) {
             roundRobinIndex = (roundRobinIndex + 1) % list.size();

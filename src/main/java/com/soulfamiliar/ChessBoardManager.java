@@ -201,24 +201,24 @@ public class ChessBoardManager {
         if (client.level == null) return false;
         boolean sentPacket = false;
 
-        if (fallingStandUuid != null && fallTicksLeft > 0 && tickCount % 2 == 0) {
+        if (fallingStandUuid != null && fallTicksLeft > 0) {
             ArmorStand victim = findStandByUuid(client.level, fallingStandUuid);
             if (victim != null && graveyardDestination != null) {
-                Vec3 delta = graveyardDestination.subtract(victim.position()).scale(0.35);
+                Vec3 delta = graveyardDestination.subtract(victim.position()).scale(0.28);
                 PoserBridge.sendUpdate(victim, PoseState.fallen(victim.getYRot()), delta, true);
                 sentPacket = true;
             }
-            fallTicksLeft -= 2;
+            fallTicksLeft--;
             if (fallTicksLeft <= 0) {
                 fallingStandUuid = null;
             }
         }
 
-        if (!sentPacket && movingStandUuid != null && moveTicksLeft > 0 && tickCount % 2 == 0) {
+        if (!sentPacket && movingStandUuid != null && moveTicksLeft > 0) {
             ArmorStand piece = findStandByUuid(client.level, movingStandUuid);
             if (piece != null && moveDestination != null) {
                 Vec3 diff = moveDestination.subtract(piece.position());
-                Vec3 step = moveTicksLeft <= 2 ? diff : diff.scale(0.42);
+                Vec3 step = moveTicksLeft <= 1 ? diff : diff.scale(0.32);
                 PoserBridge.sendMoveOnly(piece, step, moveYaw);
                 sentPacket = true;
 
@@ -229,7 +229,7 @@ public class ChessBoardManager {
                     }
                 }
             }
-            moveTicksLeft -= 2;
+            moveTicksLeft--;
             if (moveTicksLeft <= 0) {
                 if (activeCommanderName != null) {
                     Familiar cmd = FamiliarManager.getInstance().getByName(activeCommanderName);

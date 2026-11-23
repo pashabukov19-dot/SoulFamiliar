@@ -26,6 +26,7 @@ public final class ChatCommandParser {
         String msg = rawMessage.trim();
         if (msg.isEmpty()) return;
         String lower = msg.toLowerCase(Locale.ROOT);
+        long currentTick = FamiliarDialogueEngine.getInstance().getTickCounter();
 
         // 1. Rituals
         if (lower.startsWith("восстань ")) {
@@ -71,19 +72,44 @@ public final class ChatCommandParser {
         List<Familiar> targets = resolveAddressedFamiliars(lower);
         if (targets.isEmpty()) return;
 
-        // 4. Chatter toggle & jokes
+        // 4. Mood, Hive Memory & Chatter controls
         if (lower.contains("молчи") || lower.contains("тихо") || lower.contains("заткнись")) {
             FamiliarDialogueEngine.getInstance().setChatterEnabled(false);
-            targets.get(0).speakToOwner(client, "Молчу-молчу. Буду страдать в тишине.");
+            targets.get(0).speakToOwner(client, "Повинуюсь, " + FamiliarDialogueEngine.randomHonorific() + ". Храню безмолвие, но в случае опасности немедленно предупрежу вас.");
             return;
         }
         if (lower.contains("болтай") || lower.contains("говори") || lower.contains("разговаривай")) {
             FamiliarDialogueEngine.getInstance().setChatterEnabled(true);
-            targets.get(0).speakToOwner(client, "О, ты разрешил мне комментировать происходящее? Сам напросился.");
+            targets.get(0).speakToOwner(client, "Благодарю за право голоса, " + FamiliarDialogueEngine.randomHonorific() + "! Я снова делюсь всеми мыслями.");
             return;
         }
         if (lower.contains("шутк") || lower.contains("пошути") || lower.contains("скажи что-нибудь")) {
-            FamiliarDialogueEngine.getInstance().speakImmediateJoke(client, targets.get(0));
+            FamiliarDialogueEngine.getInstance().speakMoodJoke(client, targets.get(0));
+            return;
+        }
+        if (lower.contains("настроен")) {
+            if (lower.contains("смени") || lower.contains("поменяй") || lower.contains("другое")) {
+                for (Familiar f : targets) f.cycleMood();
+                targets.get(0).speakToOwner(client, "Моё состояние переменилось, " + FamiliarDialogueEngine.randomHonorific() + ". Теперь моё настроение — " + targets.get(0).getMood().getRussianLabel() + ".");
+            } else {
+                targets.get(0).speakToOwner(client, "Сейчас моё настроение — " + targets.get(0).getMood().getRussianLabel() + ", " + FamiliarDialogueEngine.randomHonorific() + ".");
+            }
+            return;
+        }
+        if (lower.contains("общая память") || lower.contains("коллективный разум") || lower.contains("что вы знаете") || lower.contains("что помните")) {
+            List<HiveMemory.MemoryEntry> entries = HiveMemory.getInstance().getRecentEntries(currentTick, 5);
+            String h = FamiliarDialogueEngine.randomHonorific();
+            if (entries.isEmpty()) {
+                targets.get(0).speakToOwner(client, "В нашей коллективной памяти пока нет отмеченных находок, " + h + ". Мы продолжаем разведку.");
+            } else {
+                List<String> notes = new ArrayList<>();
+                for (HiveMemory.MemoryEntry e : entries) {
+                    int dist = (int) Math.round(client.player.getEyePosition().distanceTo(e.pos()));
+                    String dir = WorldScout.relativeDirection(client.player, e.pos());
+                    notes.add(e.label() + " (" + dist + " бл. " + dir + ", заметил " + e.discoveredBy() + ")");
+                }
+                targets.get(0).speakToOwner(client, "Из нашей общей памяти, " + h + ", мне известно следующее: " + String.join("; ", notes) + ".");
+            }
             return;
         }
 
@@ -111,16 +137,21 @@ public final class ChatCommandParser {
             return;
         }
 
-        // 6. Dialogue & Scouting ("что ты видишь", "где ...", "погуляй", "на плечо")
+        // 6. Detailed sight inspection: "что я вижу" vs "что ты видишь"
+        if (lower.contains("что я вижу") || lower.contains("что передо мной") || lower.contains("опиши мой взгляд") || lower.contains("куда я смотрю")) {
+            targets.get(0).speakPlayerGaze(client);
+            return;
+        }
+
         if (lower.contains("что ты видишь") || lower.contains("что видишь") || lower.contains("осмотрись") || lower.contains("что вокруг") || lower.contains("доложи")) {
-            targets.get(0).speakSurroundings(client);
+            targets.get(0).speakSurroundings(client, currentTick);
             return;
         }
 
         Matcher locateMatcher = LOCATE_PATTERN.matcher(msg);
         if (locateMatcher.find()) {
             String targetQuery = locateMatcher.group(1).trim();
-            targets.get(0).locateAndReport(client, targetQuery);
+            targets.get(0).locateAndReport(client, targetQuery, currentTick);
             return;
         }
 
@@ -129,7 +160,7 @@ public final class ChatCommandParser {
                 f.setRoamEnabled(false);
                 f.setMode(FamiliarMode.IDLE);
             }
-            targets.get(0).speakToOwner(client, "Возвращаюсь на пост у твоего плеча.");
+            targets.get(0).speakToOwner(client, "Возвращаюсь на пост у вашего плеча, " + FamiliarDialogueEngine.randomHonorific() + ".");
             return;
         }
 
@@ -138,7 +169,7 @@ public final class ChatCommandParser {
                 f.setRoamEnabled(true);
                 f.setMode(FamiliarMode.IDLE);
             }
-            targets.get(0).speakToOwner(client, "Полечу осмотрюсь. Постарайся не вляпаться ни во что, пока меня нет.");
+            targets.get(0).speakToOwner(client, "Вылетаю на широкую разведку в пределах 22 блоков, " + FamiliarDialogueEngine.randomHonorific() + ".");
             return;
         }
 
@@ -157,7 +188,7 @@ public final class ChatCommandParser {
                 targetEntity = WorldScout.findEntityForStalk(client.level, client.player, tail);
             }
             if (targetEntity == null) {
-                targetEntity = FamiliarManager.raycastAnyEntity(client, 18.0);
+                targetEntity = FamiliarManager.raycastAnyEntity(client, 22.0);
             }
             if (targetEntity == null) {
                 FamiliarManager.notifyPlayer(client, "Укажи имя/тип цели или посмотри на существо перед командой «преследуй».", ChatFormatting.YELLOW);
@@ -166,7 +197,7 @@ public final class ChatCommandParser {
             for (Familiar f : targets) {
                 f.triggerStalk(targetEntity);
             }
-            targets.get(0).speakToOwner(client, "Перехожу в режим тени. «" + targetEntity.getName().getString() + "» даже не поймёт, что за ним следят.");
+            targets.get(0).speakToOwner(client, "Как прикажете, " + FamiliarDialogueEngine.randomHonorific() + ". «" + targetEntity.getName().getString() + "» теперь под моим незримым надзором.");
             return;
         }
 
@@ -187,7 +218,7 @@ public final class ChatCommandParser {
         // 10. Dance & theatrical poses
         if (lower.contains("танц")) {
             for (Familiar f : targets) f.setMode(FamiliarMode.DANCE);
-            targets.get(0).speakToOwner(client, "И ради этого я пересекал границу между мирами? Ладно, смотри!");
+            targets.get(0).speakToOwner(client, "С радостью исполню танец в вашу честь, " + FamiliarDialogueEngine.randomHonorific() + "!");
             return;
         }
         if (lower.contains("колен")) {
@@ -227,7 +258,7 @@ public final class ChatCommandParser {
         if (lower.contains("напуг")) {
             Player victim = findMentionedPlayer(client, msg);
             if (victim == null) {
-                victim = FamiliarManager.raycastPlayer(client, 12.0);
+                victim = FamiliarManager.raycastPlayer(client, 14.0);
             }
             if (victim == null) {
                 FamiliarManager.notifyPlayer(client, "Укажи ник игрока или посмотри на цель перед командой «напугай».", ChatFormatting.YELLOW);
@@ -236,7 +267,7 @@ public final class ChatCommandParser {
             for (Familiar f : targets) {
                 f.triggerScare(victim, f.resolveBoundStand(client.level));
             }
-            targets.get(0).speakToOwner(client, "С удовольствием. Сейчас у «" + victim.getName().getString() + "» прибавится седых волос.");
+            targets.get(0).speakToOwner(client, "С величайшим удовольствием, " + FamiliarDialogueEngine.randomHonorific() + "! Сейчас «" + victim.getName().getString() + "» испытает леденящий ужас.");
             return;
         }
 
@@ -250,7 +281,7 @@ public final class ChatCommandParser {
         }
 
         if (lower.contains("укаж") || lower.contains("покаж")) {
-            Vec3 targetPos = FamiliarManager.raycastLookPoint(client, 16.0);
+            Vec3 targetPos = FamiliarManager.raycastLookPoint(client, 20.0);
             for (Familiar f : targets) {
                 f.triggerPoint(targetPos);
             }
