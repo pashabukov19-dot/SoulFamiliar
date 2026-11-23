@@ -19,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Familiar {
     private static int nextFakeEntityId = -91000;
@@ -86,13 +87,14 @@ public class Familiar {
 
         // Burst of soul particles into the armor stand head
         Vec3 headPos = stand.position().add(0, 1.65, 0);
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
         for (int i = 0; i < 24; i++) {
-            double ox = (client.level.random.nextDouble() - 0.5) * 0.7;
-            double oy = (client.level.random.nextDouble() - 0.5) * 0.7;
-            double oz = (client.level.random.nextDouble() - 0.5) * 0.7;
+            double ox = (rng.nextDouble() - 0.5) * 0.7;
+            double oy = (rng.nextDouble() - 0.5) * 0.7;
+            double oz = (rng.nextDouble() - 0.5) * 0.7;
             client.level.addParticle(ParticleTypes.SOUL_FIRE_FLAME, headPos.x + ox, headPos.y + oy, headPos.z + oz, 0, 0.03, 0);
         }
-        client.level.playLocalSound(headPos.x, headPos.y, headPos.z, SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 0.9f, 0.85f, false);
+        client.level.playLocalSound(headPos.x, headPos.y, headPos.z, SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 0.9f, 0.85f, false);
         discardEtherealVisual();
     }
 
@@ -101,11 +103,12 @@ public class Familiar {
             ArmorStand stand = resolveBoundStand(client.level);
             if (stand != null) {
                 Vec3 pos = stand.position().add(0, 1.65, 0);
+                ThreadLocalRandom rng = ThreadLocalRandom.current();
                 for (int i = 0; i < 16; i++) {
                     client.level.addParticle(ParticleTypes.SOUL, pos.x, pos.y, pos.z,
-                            (client.level.random.nextDouble() - 0.5) * 0.08,
+                            (rng.nextDouble() - 0.5) * 0.08,
                             0.05,
-                            (client.level.random.nextDouble() - 0.5) * 0.08);
+                            (rng.nextDouble() - 0.5) * 0.08);
                 }
             }
         }
@@ -315,6 +318,7 @@ public class Familiar {
     }
 
     private void tickEtherealSkull(ClientLevel level, LocalPlayer player, int index, int totalEthereal, long tickCount) {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
         Vec3 targetPos;
         float targetYaw;
         float targetPitch;
@@ -344,7 +348,7 @@ public class Familiar {
                 targetPitch = 42.0f;
                 if (--actionTimer <= 0) mode = FamiliarMode.IDLE;
             } else if (startleTicks > 0) {
-                targetPos = targetPos.add((level.random.nextDouble() - 0.5) * 0.15, 0.1, (level.random.nextDouble() - 0.5) * 0.15);
+                targetPos = targetPos.add((rng.nextDouble() - 0.5) * 0.15, 0.1, (rng.nextDouble() - 0.5) * 0.15);
             }
         }
 
@@ -354,7 +358,6 @@ public class Familiar {
             etherealVisual.setInvisible(true);
             etherealVisual.setNoGravity(true);
             etherealVisual.setNoBasePlate(true);
-            etherealVisual.setMarker(true);
             etherealVisual.setItemSlot(EquipmentSlot.HEAD, skullStack.copy());
             level.addEntity(etherealVisual);
         }
@@ -368,9 +371,9 @@ public class Familiar {
 
         // Client-only soul particles trailing from the skull
         if (tickCount % 3 == 0) {
-            double px = targetPos.x + (level.random.nextDouble() - 0.5) * 0.32;
-            double py = targetPos.y + (level.random.nextDouble() - 0.5) * 0.25;
-            double pz = targetPos.z + (level.random.nextDouble() - 0.5) * 0.32;
+            double px = targetPos.x + (rng.nextDouble() - 0.5) * 0.32;
+            double py = targetPos.y + (rng.nextDouble() - 0.5) * 0.25;
+            double pz = targetPos.z + (rng.nextDouble() - 0.5) * 0.32;
             level.addParticle(ParticleTypes.SOUL, px, py, pz, 0.0, 0.025, 0.0);
         }
         if (tickCount % 11 == 0) {
@@ -381,13 +384,14 @@ public class Familiar {
     public void dismiss(Minecraft client) {
         if (client.level != null && client.player != null) {
             Vec3 pos = etherealVisual != null ? etherealVisual.position().add(0, 1.45, 0) : client.player.getEyePosition();
+            ThreadLocalRandom rng = ThreadLocalRandom.current();
             for (int i = 0; i < 20; i++) {
                 client.level.addParticle(ParticleTypes.SOUL, pos.x, pos.y, pos.z,
-                        (client.level.random.nextDouble() - 0.5) * 0.12,
+                        (rng.nextDouble() - 0.5) * 0.12,
                         0.06,
-                        (client.level.random.nextDouble() - 0.5) * 0.12);
+                        (rng.nextDouble() - 0.5) * 0.12);
             }
-            client.level.playLocalSound(pos.x, pos.y, pos.z, SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 0.8f, 0.6f, false);
+            client.level.playLocalSound(pos.x, pos.y, pos.z, SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 0.8f, 0.6f, false);
         }
         discardEtherealVisual();
     }
