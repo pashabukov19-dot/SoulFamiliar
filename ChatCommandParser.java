@@ -277,7 +277,7 @@ public final class ChatCommandParser {
             return;
         }
 
-        if ((lower.contains("погуляй") || lower.equals("гуляй") || lower.contains(" гуляй") || lower.startsWith("гуляй")) || lower.contains("изучай") || lower.contains("исследуй") || lower.contains("свободно")) {
+        if (lower.contains("погуляй") || lower.contains("изучай") || lower.contains("исследуй") || lower.contains("свободно")) {
             for (Familiar f : targets) {
                 f.setRoamEnabled(true);
                 f.setMode(FamiliarMode.IDLE);
@@ -421,6 +421,51 @@ public final class ChatCommandParser {
         if (isSilentCommand || directlyNamed || singleFamiliarConversation) {
             FamiliarDialogueEngine.getInstance().handleDirectConversationWithMaster(client, targets.get(0), msg, isSilentCommand);
         }
+    }
+
+    public static Vec3 computeRelativeBlockDestination(Minecraft client, Familiar familiar, double blocks, String dirTail) {
+        if (client == null || client.level == null || client.player == null || familiar == null) return null;
+        Vec3 currentPos = familiar.getCurrentWorldPosition(client.level, client.player);
+        net.minecraft.world.entity.decoration.ArmorStand stand = familiar.resolveBoundStand(client.level);
+        Vec3 basePos = stand != null ? stand.position() : currentPos;
+
+        float playerYawRad = (float) Math.toRadians(client.player.getYRot());
+        Vec3 playerForward = new Vec3(-Math.sin(playerYawRad), 0, Math.cos(playerYawRad)).normalize();
+        Vec3 playerRight = new Vec3(-playerForward.z, 0, playerForward.x).normalize();
+
+        Vec3 dirVec;
+        String d = dirTail == null ? "" : dirTail.toLowerCase(Locale.ROOT);
+        if (d.contains("назад") || d.contains("от меня")) {
+            Vec3 away = basePos.subtract(client.player.position());
+            Vec3 horizAway = new Vec3(away.x, 0, away.z);
+            dirVec = horizAway.lengthSqr() > 0.01 ? horizAway.normalize() : playerForward;
+        } else if (d.contains("ко мне") || d.contains("к мне") || d.contains("ближе")) {
+            Vec3 toward = client.player.position().subtract(basePos);
+            Vec3 horizToward = new Vec3(toward.x, 0, toward.z);
+            dirVec = horizToward.lengthSqr() > 0.01 ? horizToward.normalize() : playerForward.scale(-1);
+        } else if (d.contains("влево") || d.contains("налево")) {
+            dirVec = playerRight.scale(-1);
+        } else if (d.contains("вправо") || d.contains("направо")) {
+            dirVec = playerRight;
+        } else if (d.contains("север")) {
+            dirVec = new Vec3(0, 0, -1);
+        } else if (d.contains("юг")) {
+            dirVec = new Vec3(0, 0, 1);
+        } else if (d.contains("запад")) {
+            dirVec = new Vec3(-1, 0, 0);
+        } else if (d.contains("восток")) {
+            dirVec = new Vec3(1, 0, 0);
+        } else if (d.contains("вперёд") || d.contains("вперед")) {
+            dirVec = playerForward;
+        } else {
+            // Default: walk forward in the direction the stand/familiar is currently facing (or player's look direction)
+            float standYaw = stand != null ? stand.getYRot() : client.player.getYRot();
+            float rad = (float) Math.toRadians(standYaw);
+            Vec3 standForward = new Vec3(-Math.sin(rad), 0, Math.cos(rad));
+            dirVec = standForward.lengthSqr() > 0.01 ? standForward.normalize() : playerForward;
+        }
+
+        return basePos.add(dirVec.scale(blocks));
     }
 
     private static boolean isDirectlyNamedIn(String lower, List<Familiar> targets) {
