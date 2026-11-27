@@ -35,7 +35,7 @@ public class SoulFamiliarMod implements ClientModInitializer {
                 FamiliarManager.getInstance().toggleNextPossessionView(client);
             }
             while (openGrimoireKey.consumeClick()) {
-                if (client.screen == null && client.player != null) {
+                if (FamiliarManager.getCurrentScreen(client) == null && client.player != null) {
                     FamiliarManager.getInstance().requestOpenGrimoire(GrimoireScreen.Tab.ASH_CHRONICLES);
                 }
             }

@@ -2,6 +2,7 @@ package com.soulfamiliar;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -47,6 +48,32 @@ public class FamiliarManager {
 
     public static FamiliarManager getInstance() {
         return INSTANCE;
+    }
+
+    public static Screen getCurrentScreen(Minecraft client) {
+        if (client == null) return null;
+        for (java.lang.reflect.Field f : Minecraft.class.getDeclaredFields()) {
+            if (Screen.class.isAssignableFrom(f.getType())) {
+                try {
+                    f.setAccessible(true);
+                    return (Screen) f.get(client);
+                } catch (Throwable ignored) {}
+            }
+        }
+        return null;
+    }
+
+    public static void openScreen(Minecraft client, Screen screen) {
+        if (client == null) return;
+        for (java.lang.reflect.Method m : Minecraft.class.getDeclaredMethods()) {
+            if (m.getParameterCount() == 1 && m.getParameterTypes()[0] == Screen.class && m.getReturnType() == void.class) {
+                try {
+                    m.setAccessible(true);
+                    m.invoke(client, screen);
+                    return;
+                } catch (Throwable ignored) {}
+            }
+        }
     }
 
     public void requestOpenGrimoire(GrimoireScreen.Tab tab) {
@@ -217,7 +244,7 @@ public class FamiliarManager {
             if (--pendingGrimoireDelay <= 0) {
                 GrimoireScreen.Tab tabToOpen = pendingGrimoireTab;
                 pendingGrimoireTab = null;
-                client.setScreen(new GrimoireScreen(tabToOpen));
+                openScreen(client, new GrimoireScreen(tabToOpen));
             }
         }
         if (client.level == null || client.player == null) {
@@ -273,7 +300,7 @@ public class FamiliarManager {
     private void trackOpenedContainer(Minecraft client) {
         if (client.player == null || client.level == null) return;
 
-        if (!(client.screen instanceof ContainerScreen containerScreen)) {
+        if (!(getCurrentScreen(client) instanceof ContainerScreen containerScreen)) {
             recordedCurrentScreen = false;
             return;
         }

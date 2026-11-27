@@ -4,7 +4,7 @@ import com.soulfamiliar.GrimoireState.CardDef;
 import com.soulfamiliar.GrimoireState.CardRow;
 import com.soulfamiliar.GrimoireState.WishResult;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -569,7 +569,7 @@ public class GrimoireScreen extends Screen {
     // RENDERING (Pixel-Art CRT Terminal Aesthetic)
     // =========================================================================
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         // Dark vignette backdrop
         g.fill(0, 0, this.width, this.height, 0xCC06070A);
 
@@ -659,13 +659,13 @@ public class GrimoireScreen extends Screen {
             case COMMANDS -> renderCommandsTab(g, left + 6, contentTop, right - 6, contentBottom);
         }
 
-        super.render(g, mouseX, mouseY, partialTick);
+        super.extractRenderState(g, mouseX, mouseY, partialTick);
     }
 
     // =========================================================================
     // TAB 0: CHRONICLES OF ASH RENDER
     // =========================================================================
-    private void renderAshChronicles(GuiGraphics g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
+    private void renderAshChronicles(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
         int w = x2 - x1;
         int pTotal = getPlayerTotalPower();
         int eTotal = getEnemyTotalPower();
@@ -760,7 +760,7 @@ public class GrimoireScreen extends Screen {
         }
     }
 
-    private void renderBoardRow(GuiGraphics g, int x, int y, int w, int h, String label, List<CardDef> cards, boolean weathered, boolean highlight, boolean isPlayerSide, int mouseX, int mouseY) {
+    private void renderBoardRow(GuiGraphicsExtractor g, int x, int y, int w, int h, String label, List<CardDef> cards, boolean weathered, boolean highlight, boolean isPlayerSide, int mouseX, int mouseY) {
         int bg = weathered ? 0xFF132230 : (isPlayerSide ? 0xFF131918 : 0xFF1A1417);
         if (highlight && (animTicks / 6) % 2 == 0) {
             bg = 0xFF283529;
@@ -787,7 +787,7 @@ public class GrimoireScreen extends Screen {
         }
     }
 
-    private void renderPixelCard(GuiGraphics g, CardDef c, int x, int y, int w, int h, boolean hovered) {
+    private void renderPixelCard(GuiGraphicsExtractor g, CardDef c, int x, int y, int w, int h, boolean hovered) {
         int bg = c.hero ? 0xFF261E10 : 0xFF151B22;
         g.fill(x, y, x + w, y + h, bg);
         drawPixelBorder(g, x, y, w, h, hovered ? 0xFFFFFFFF : (c.hero ? 0xFFFFD700 : c.row.color));
@@ -810,7 +810,7 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // TAB 1: ETHER SNAKE RENDER
     // =========================================================================
-    private void renderEtherSnake(GuiGraphics g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
+    private void renderEtherSnake(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
         int w = x2 - x1;
         GrimoireState state = GrimoireState.getInstance();
 
@@ -872,7 +872,7 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // TAB 2: SOUL SUMMON (GACHA) RENDER
     // =========================================================================
-    private void renderSoulSummon(GuiGraphics g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
+    private void renderSoulSummon(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
         int w = x2 - x1;
         GrimoireState state = GrimoireState.getInstance();
 
@@ -939,7 +939,7 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // TAB 3: DECK BUILDER & CATALOG RENDER
     // =========================================================================
-    private void renderDeckBuilder(GuiGraphics g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
+    private void renderDeckBuilder(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
         int w = x2 - x1;
         GrimoireState state = GrimoireState.getInstance();
         List<CardDef> all = state.getAllCatalogCards();
@@ -987,7 +987,7 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // TAB 4: DAILIES & PASSIVE ETHER RENDER
     // =========================================================================
-    private void renderDailies(GuiGraphics g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
+    private void renderDailies(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int mouseX, int mouseY) {
         int w = x2 - x1;
         GrimoireState state = GrimoireState.getInstance();
         int activeCount = FamiliarManager.getInstance().getAll().size();
@@ -1015,7 +1015,7 @@ public class GrimoireScreen extends Screen {
                 120, state.isDailyGrimoireReady(), state.isDailyGrimoireClaimed(), mouseX, mouseY);
     }
 
-    private void renderDailyRow(GuiGraphics g, int x, int y, int w, int h, String title, String sub, int reward, boolean ready, boolean claimed, int mouseX, int mouseY) {
+    private void renderDailyRow(GuiGraphicsExtractor g, int x, int y, int w, int h, String title, String sub, int reward, boolean ready, boolean claimed, int mouseX, int mouseY) {
         g.fill(x, y, x + w, y + h, claimed ? 0xFF101614 : 0xFF151B22);
         drawPixelBorder(g, x, y, w, h, ready ? 0xFFFFD700 : (claimed ? 0xFF2E7D32 : 0xFF37474F));
 
@@ -1036,7 +1036,7 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // TAB 5: COMMANDS REFERENCE RENDER
     // =========================================================================
-    private void renderCommandsTab(GuiGraphics g, int x1, int y1, int x2, int y2) {
+    private void renderCommandsTab(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2) {
         int w = x2 - x1;
         g.fill(x1, y1, x2, y1 + 18, 0xFF141920);
         g.drawString(this.font, "СВИТОК КОМАНД ФАМИЛЬЯРОВ (" + FAMILIAR_COMMANDS.length + " приказов) • Колёсико: прокрутка", x1 + 6, y1 + 5, 0xFFFFE082, false);
@@ -1306,14 +1306,14 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // PIXEL ART HELPERS
     // =========================================================================
-    private static void drawPixelBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
+    private static void drawPixelBorder(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
         g.fill(x, y, x + w, y + 1, color);
         g.fill(x, y + h - 1, x + w, y + h, color);
         g.fill(x, y, x + 1, y + h, color);
         g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
-    private static void drawPixelSkullIcon(GuiGraphics g, int x, int y, int color) {
+    private static void drawPixelSkullIcon(GuiGraphicsExtractor g, int x, int y, int color) {
         g.fill(x + 2, y, x + 10, y + 2, color);
         g.fill(x + 1, y + 2, x + 11, y + 7, color);
         g.fill(x + 3, y + 4, x + 5, y + 6, 0xFF0A0E12);
@@ -1323,7 +1323,7 @@ public class GrimoireScreen extends Screen {
         g.fill(x + 7, y + 8, x + 8, y + 10, 0xFF0A0E12);
     }
 
-    private static void drawCardPixelGlyph(GuiGraphics g, int kind, int x, int y, int color) {
+    private static void drawCardPixelGlyph(GuiGraphicsExtractor g, int kind, int x, int y, int color) {
         switch (kind % 8) {
             case 0 -> { // Sword / Stand
                 g.fill(x + 5, y + 1, x + 7, y + 11, color);
