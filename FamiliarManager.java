@@ -47,6 +47,10 @@ public class FamiliarManager {
         return INSTANCE;
     }
 
+    public long getTickCounter() {
+        return tickCounter;
+    }
+
     public ChessBoardManager getChessBoard() {
         return chessBoard;
     }

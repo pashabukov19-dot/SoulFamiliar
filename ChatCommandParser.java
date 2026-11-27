@@ -135,6 +135,25 @@ public final class ChatCommandParser {
             }
         }
 
+        if (lower.equals("гримуар") || lower.equals("открой гримуар") || lower.contains("гримуар")
+                || lower.contains("хроники пепла") || lower.contains("призыв душ")
+                || lower.contains("эфирный змей") || lower.contains("змейк")
+                || lower.contains("сыграем") || lower.contains("мини-игр") || lower.contains("дейлик")) {
+            GrimoireScreen.Tab targetTab = GrimoireScreen.Tab.ASH_CHRONICLES;
+            if (lower.contains("змей")) {
+                targetTab = GrimoireScreen.Tab.ETHER_SNAKE;
+            } else if (lower.contains("призыв") || lower.contains("гача") || lower.contains("крутк")) {
+                targetTab = GrimoireScreen.Tab.SOUL_SUMMON;
+            } else if (lower.contains("колод")) {
+                targetTab = GrimoireScreen.Tab.DECK_BUILDER;
+            } else if (lower.contains("дейлик") || lower.contains("задан") || lower.contains("эфир")) {
+                targetTab = GrimoireScreen.Tab.DAILIES;
+            }
+            final GrimoireScreen.Tab openTab = targetTab;
+            client.execute(() -> client.setScreen(new GrimoireScreen(openTab)));
+            return;
+        }
+
         if (lower.startsWith("восстань ")) {
             String name = extractName(msg.substring("восстань ".length()));
             FamiliarManager.getInstance().summonFamiliar(client, name, !isSilentCommand);
