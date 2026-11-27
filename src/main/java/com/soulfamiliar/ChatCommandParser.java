@@ -32,21 +32,69 @@ public final class ChatCommandParser {
         if (isSilentCommand) {
             if (lower.startsWith("ключ ") || lower.startsWith("api ") || lower.startsWith("groq ")) {
                 String key = msg.substring(msg.indexOf(' ') + 1).trim();
-                FamiliarConfig.getInstance().setApiUrl(FamiliarConfig.DEFAULT_GROQ_URL);
+                if (FamiliarConfig.getInstance().getApiUrl().isBlank()) {
+                    FamiliarConfig.getInstance().setApiUrl(FamiliarConfig.DEFAULT_GROQ_URL);
+                }
                 FamiliarConfig.getInstance().setApiKey(key);
                 FamiliarConfig.getInstance().setAiEnabled(true);
-                FamiliarManager.notifyPlayer(client, "Ключ Groq сохранён (" + FamiliarConfig.getInstance().getMaskedKey() + "). Живой разум активирован!", ChatFormatting.GREEN);
+                GroqBrain.getInstance().resetFailureWarning();
+                FamiliarManager.notifyPlayer(client, "Ключ сохранён (" + FamiliarConfig.getInstance().getMaskedKey() + "). Проверяю связь...", ChatFormatting.GREEN);
+                GroqBrain.getInstance().testConnectionAsync(client);
+                return;
+            }
+            if (lower.equals("тест ии") || lower.equals("ии тест") || lower.equals("проверка ии")) {
+                GroqBrain.getInstance().resetFailureWarning();
+                GroqBrain.getInstance().testConnectionAsync(client);
+                return;
+            }
+            if (lower.startsWith("прокси ") || lower.startsWith("proxy ")) {
+                String proxy = msg.substring(msg.indexOf(' ') + 1).trim();
+                if (proxy.equalsIgnoreCase("выкл") || proxy.equalsIgnoreCase("off") || proxy.equalsIgnoreCase("нет")) {
+                    FamiliarConfig.getInstance().setProxyAddress("");
+                    GroqBrain.getInstance().resetFailureWarning();
+                    FamiliarManager.notifyPlayer(client, "Локальный прокси отключён.", ChatFormatting.YELLOW);
+                } else {
+                    FamiliarConfig.getInstance().setProxyAddress(proxy);
+                    GroqBrain.getInstance().resetFailureWarning();
+                    FamiliarManager.notifyPlayer(client, "Локальный HTTP-прокси установлен: " + proxy + ". Проверяю связь...", ChatFormatting.AQUA);
+                    GroqBrain.getInstance().testConnectionAsync(client);
+                }
+                return;
+            }
+            if (lower.startsWith("провайдер ")) {
+                String p = lower.substring("провайдер ".length()).trim();
+                GroqBrain.getInstance().resetFailureWarning();
+                if (p.contains("groq")) {
+                    FamiliarConfig.getInstance().setApiUrl(FamiliarConfig.DEFAULT_GROQ_URL);
+                    FamiliarConfig.getInstance().setPrimaryModel(FamiliarConfig.DEFAULT_PRIMARY_MODEL);
+                    FamiliarManager.notifyPlayer(client, "Выбран провайдер Groq.", ChatFormatting.GREEN);
+                } else if (p.contains("github")) {
+                    FamiliarConfig.getInstance().setApiUrl("https://models.inference.ai.azure.com/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("gpt-4o-mini");
+                    FamiliarManager.notifyPlayer(client, "Выбран GitHub Models. Укажи токен командой: .f ключ github_pat_...", ChatFormatting.GREEN);
+                } else if (p.contains("openrouter")) {
+                    FamiliarConfig.getInstance().setApiUrl("https://openrouter.ai/api/v1/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("google/gemma-2-9b-it:free");
+                    FamiliarManager.notifyPlayer(client, "Выбран OpenRouter. Укажи ключ командой: .f ключ sk-or-...", ChatFormatting.GREEN);
+                } else if (p.contains("ollama")) {
+                    FamiliarConfig.getInstance().setApiUrl("http://localhost:11434/v1/chat/completions");
+                    FamiliarConfig.getInstance().setPrimaryModel("llama3.2");
+                    FamiliarConfig.getInstance().setAiEnabled(true);
+                    FamiliarManager.notifyPlayer(client, "Выбрана локальная Ollama (localhost:11434).", ChatFormatting.GREEN);
+                }
                 return;
             }
             if (lower.startsWith("модель ")) {
                 String model = msg.substring("модель ".length()).trim();
                 FamiliarConfig.getInstance().setPrimaryModel(model);
+                GroqBrain.getInstance().resetFailureWarning();
                 FamiliarManager.notifyPlayer(client, "Основная модель ИИ изменена на: " + model, ChatFormatting.AQUA);
                 return;
             }
             if (lower.startsWith("адрес ") || lower.startsWith("url ")) {
                 String url = msg.substring(msg.indexOf(' ') + 1).trim();
                 FamiliarConfig.getInstance().setApiUrl(url);
+                GroqBrain.getInstance().resetFailureWarning();
                 FamiliarManager.notifyPlayer(client, "Адрес провайдера обновлён: " + url, ChatFormatting.AQUA);
                 return;
             }
@@ -57,12 +105,14 @@ public final class ChatCommandParser {
                     String bKey = parts.length >= 2 ? parts[1] : "none";
                     String bModel = parts.length >= 3 ? parts[2] : "llama3.2";
                     FamiliarConfig.getInstance().setBackupProvider(bUrl, bKey, bModel);
+                    GroqBrain.getInstance().resetFailureWarning();
                     FamiliarManager.notifyPlayer(client, "Резервный провайдер сохранён: " + bUrl + " (модель: " + bModel + ")", ChatFormatting.GREEN);
                 }
                 return;
             }
             if (lower.equals("ии вкл") || lower.equals("нейросеть вкл")) {
                 FamiliarConfig.getInstance().setAiEnabled(true);
+                GroqBrain.getInstance().resetFailureWarning();
                 FamiliarManager.notifyPlayer(client, "Режим нейросети включён.", ChatFormatting.GREEN);
                 return;
             }
@@ -73,14 +123,41 @@ public final class ChatCommandParser {
             }
             if (lower.equals("статус ии") || lower.equals("ии статус") || lower.equals("groq статус")) {
                 FamiliarConfig cfg = FamiliarConfig.getInstance();
+                String proxyInfo = cfg.getProxyAddress().isBlank() ? "нет" : cfg.getProxyAddress();
                 FamiliarManager.notifyPlayer(client,
-                        "ИИ: " + (cfg.hasActiveAi() ? "АКТИВЕН" : "ВЫКЛЮЧЕН / НЕТ КЛЮЧА")
+                        "ИИ: " + (cfg.hasActiveAi() ? "АКТИВЕН" : "ВЫКЛЮЧЕН")
                                 + " | Ключ: " + cfg.getMaskedKey()
-                                + " | Модель: " + cfg.getPrimaryModel()
-                                + " | Последняя рабочая: " + GroqBrain.getInstance().getLastWorkingModel(),
+                                + " | Модель: " + GroqBrain.getInstance().getLastWorkingModel()
+                                + " | Прокси: " + proxyInfo
+                                + " | Статус: " + GroqBrain.getInstance().getLastStatusInfo(),
                         ChatFormatting.AQUA);
                 return;
             }
+        }
+
+        if (lower.equals("гримуар") || lower.equals("открой гримуар") || lower.contains("гримуар")
+                || lower.contains("хроники пепла") || lower.contains("призыв душ")
+                || lower.contains("эфирный змей") || lower.contains("змейк")
+                || lower.contains("свиток команд") || lower.contains("список команд")
+                || lower.contains("сыграем") || lower.contains("мини-игр") || lower.contains("дейлик")) {
+            if (!FamiliarManager.isHoldingBook(client.player)) {
+                FamiliarManager.notifyPlayer(client, "Возьми в руку книгу (обычную, с пером, написанную или зачарованную) и напиши «гримуар».", ChatFormatting.YELLOW);
+                return;
+            }
+            GrimoireScreen.Tab targetTab = GrimoireScreen.Tab.ASH_CHRONICLES;
+            if (lower.contains("змей")) {
+                targetTab = GrimoireScreen.Tab.ETHER_SNAKE;
+            } else if (lower.contains("призыв") || lower.contains("гача") || lower.contains("крутк")) {
+                targetTab = GrimoireScreen.Tab.SOUL_SUMMON;
+            } else if (lower.contains("колод")) {
+                targetTab = GrimoireScreen.Tab.DECK_BUILDER;
+            } else if (lower.contains("дейлик") || lower.contains("задан") || lower.contains("эфир")) {
+                targetTab = GrimoireScreen.Tab.DAILIES;
+            } else if (lower.contains("команд") || lower.contains("помощ") || lower.contains("справк")) {
+                targetTab = GrimoireScreen.Tab.COMMANDS;
+            }
+            FamiliarManager.getInstance().requestOpenGrimoire(targetTab);
+            return;
         }
 
         if (lower.startsWith("восстань ")) {
@@ -156,8 +233,9 @@ public final class ChatCommandParser {
         }
         if (lower.contains("общая память") || lower.contains("коллективный разум") || lower.contains("что вы знаете") || lower.contains("что помните") || lower.contains("находк")) {
             List<HiveMemory.MemoryEntry> entries = HiveMemory.getInstance().getRecentEntries(currentTick, 5);
+            List<HiveMemory.OpenedChestRecord> chests = HiveMemory.getInstance().getRecentOpenedChests(client.level.dimension(), 3);
             String h = FamiliarDialogueEngine.randomHonorific();
-            if (entries.isEmpty()) {
+            if (entries.isEmpty() && chests.isEmpty()) {
                 targets.get(0).speakToOwner(client, "В памяти наших душ пока не запечатлено ни одной тайны, " + h + ". Мы продолжаем неспешный дозор.");
             } else {
                 List<String> notes = new ArrayList<>();
@@ -165,6 +243,10 @@ public final class ChatCommandParser {
                     int dist = (int) Math.round(client.player.getEyePosition().distanceTo(e.pos()));
                     String dir = WorldScout.relativeDirection(client.player, e.pos());
                     notes.add(e.label() + " (" + dist + " бл. " + dir + ", приметил " + e.discoveredBy() + ")");
+                }
+                for (HiveMemory.OpenedChestRecord rec : chests) {
+                    String content = rec.itemsSummary().isEmpty() ? "пусто" : String.join(", ", rec.itemsSummary().subList(0, Math.min(4, rec.itemsSummary().size())));
+                    notes.add(rec.containerTitle() + " [" + rec.pos().getX() + "," + rec.pos().getY() + "," + rec.pos().getZ() + "]: " + content);
                 }
                 targets.get(0).speakToOwner(client, "Вот что сохранили наши тени в едином эфире, " + h + ": " + String.join("; ", notes) + ".");
             }
@@ -359,9 +441,56 @@ public final class ChatCommandParser {
             return;
         }
 
-        if (isSilentCommand || isDirectlyNamedIn(lower, targets)) {
+        boolean directlyNamed = isDirectlyNamedIn(lower, targets);
+        boolean singleFamiliarConversation = (FamiliarManager.getInstance().getAll().size() == 1) && FamiliarDialogueEngine.getInstance().isChatterEnabled();
+        if (isSilentCommand || directlyNamed || singleFamiliarConversation) {
             FamiliarDialogueEngine.getInstance().handleDirectConversationWithMaster(client, targets.get(0), msg, isSilentCommand);
         }
+    }
+
+    public static Vec3 computeRelativeBlockDestination(Minecraft client, Familiar familiar, double blocks, String dirTail) {
+        if (client == null || client.level == null || client.player == null || familiar == null) return null;
+        Vec3 currentPos = familiar.getCurrentWorldPosition(client.level, client.player);
+        net.minecraft.world.entity.decoration.ArmorStand stand = familiar.resolveBoundStand(client.level);
+        Vec3 basePos = stand != null ? stand.position() : currentPos;
+
+        float playerYawRad = (float) Math.toRadians(client.player.getYRot());
+        Vec3 playerForward = new Vec3(-Math.sin(playerYawRad), 0, Math.cos(playerYawRad)).normalize();
+        Vec3 playerRight = new Vec3(-playerForward.z, 0, playerForward.x).normalize();
+
+        Vec3 dirVec;
+        String d = dirTail == null ? "" : dirTail.toLowerCase(Locale.ROOT);
+        if (d.contains("назад") || d.contains("от меня")) {
+            Vec3 away = basePos.subtract(client.player.position());
+            Vec3 horizAway = new Vec3(away.x, 0, away.z);
+            dirVec = horizAway.lengthSqr() > 0.01 ? horizAway.normalize() : playerForward;
+        } else if (d.contains("ко мне") || d.contains("к мне") || d.contains("ближе")) {
+            Vec3 toward = client.player.position().subtract(basePos);
+            Vec3 horizToward = new Vec3(toward.x, 0, toward.z);
+            dirVec = horizToward.lengthSqr() > 0.01 ? horizToward.normalize() : playerForward.scale(-1);
+        } else if (d.contains("влево") || d.contains("налево")) {
+            dirVec = playerRight.scale(-1);
+        } else if (d.contains("вправо") || d.contains("направо")) {
+            dirVec = playerRight;
+        } else if (d.contains("север")) {
+            dirVec = new Vec3(0, 0, -1);
+        } else if (d.contains("юг")) {
+            dirVec = new Vec3(0, 0, 1);
+        } else if (d.contains("запад")) {
+            dirVec = new Vec3(-1, 0, 0);
+        } else if (d.contains("восток")) {
+            dirVec = new Vec3(1, 0, 0);
+        } else if (d.contains("вперёд") || d.contains("вперед")) {
+            dirVec = playerForward;
+        } else {
+            // Default: walk forward in the direction the stand/familiar is currently facing (or player's look direction)
+            float standYaw = stand != null ? stand.getYRot() : client.player.getYRot();
+            float rad = (float) Math.toRadians(standYaw);
+            Vec3 standForward = new Vec3(-Math.sin(rad), 0, Math.cos(rad));
+            dirVec = standForward.lengthSqr() > 0.01 ? standForward.normalize() : playerForward;
+        }
+
+        return basePos.add(dirVec.scale(blocks));
     }
 
     private static boolean isDirectlyNamedIn(String lower, List<Familiar> targets) {

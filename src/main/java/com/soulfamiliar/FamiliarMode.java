@@ -7,6 +7,7 @@ public enum FamiliarMode {
     POINT,
     SCARE,
     FOLLOW,
+    GO_TO,
     FROZEN,
     POSSESSED,
     KNEEL,

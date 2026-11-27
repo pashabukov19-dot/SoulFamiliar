@@ -11,10 +11,12 @@ import net.minecraft.client.KeyMapping;
 public class SoulFamiliarMod implements ClientModInitializer {
     public static final String MOD_ID = "soulfamiliar";
     public static KeyMapping togglePossessViewKey;
+    public static KeyMapping openGrimoireKey;
 
     @Override
     public void onInitializeClient() {
         FamiliarConfig.getInstance().load();
+        GrimoireState.getInstance().load();
 
         togglePossessViewKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.soulfamiliar.toggle_eyes",
@@ -22,12 +24,28 @@ public class SoulFamiliarMod implements ClientModInitializer {
                 KeyMapping.Category.MISC
         ));
 
+        openGrimoireKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.soulfamiliar.open_grimoire",
+                InputConstants.KEY_G,
+                KeyMapping.Category.MISC
+        ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (togglePossessViewKey.consumeClick()) {
                 FamiliarManager.getInstance().toggleNextPossessionView(client);
             }
+            while (openGrimoireKey.consumeClick()) {
+                if (client.screen == null && client.player != null) {
+                    FamiliarManager.getInstance().requestOpenGrimoire(GrimoireScreen.Tab.ASH_CHRONICLES);
+                }
+            }
             FamiliarManager.getInstance().tick(client);
             FamiliarDialogueEngine.getInstance().tick(client);
+            GrimoireState.getInstance().tickClient(
+                    client,
+                    FamiliarManager.getInstance().getAll().size(),
+                    FamiliarManager.getInstance().getTickCounter()
+            );
         });
 
         ClientSendMessageEvents.ALLOW_CHAT.register(message -> {
