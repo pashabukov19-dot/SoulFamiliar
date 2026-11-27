@@ -448,15 +448,22 @@ public class Familiar {
                 }
             }
             case FOLLOW -> {
-                float rad = (player.getYRot() + 55.0f + groupIndex * 32.0f) * Mth.DEG_TO_RAD;
-                Vec3 desiredPos = player.position().add(-Mth.sin(rad) * 1.5, 0.45 + Math.sin(tickCount * 0.1) * 0.12, Mth.cos(rad) * 1.5);
+                float rad = (player.getYRot() + 55.0f + groupIndex * 36.0f) * Mth.DEG_TO_RAD;
+                double escortDist = 2.6 + groupIndex * 0.55;
+                Vec3 desiredPos = player.position().add(-Mth.sin(rad) * escortDist, 0.0, Mth.cos(rad) * escortDist);
                 Vec3 diff = desiredPos.subtract(standPos);
-                if (diff.length() > 0.12) {
-                    moveDelta = diff.scale(0.28);
+                double horizDist = Math.hypot(diff.x, diff.z);
+                float walkYaw = yawBetween(standPos, desiredPos);
+                if (horizDist > 0.75 || Math.abs(diff.y) > 0.65) {
+                    double maxStep = 0.11;
+                    double stepX = Mth.clamp(diff.x * 0.14, -maxStep, maxStep);
+                    double stepZ = Mth.clamp(diff.z * 0.14, -maxStep, maxStep);
+                    double stepY = Mth.clamp(diff.y * 0.12, -0.07, 0.07);
+                    moveDelta = new Vec3(stepX, stepY, stepZ);
+                    desired = PoseState.march(walkYaw, tickCount * 0.65f, true);
+                } else {
+                    desired = PoseState.idle(yawBetween(standPos, player.position()), tickCount);
                 }
-                desired = PoseState.idle(player.getYRot(), tickCount);
-                desired.leftLegX = 14.0f;
-                desired.rightLegX = 22.0f;
             }
             case KNEEL -> desired = PoseState.kneel(yawBetween(standPos, player.position()));
             case MEDITATE -> {
