@@ -39,6 +39,10 @@ public class Familiar {
     private boolean roamEnabled = true;
     private Vec3 roamGoal = null;
     private int roamPauseTicks = 0;
+    private int standFreeWillActionTimer = 0;
+    private PoseState standFreeWillPose = null;
+    private long lastMandatoryBowTick = -200L;
+
     private Vec3 inspectFocusPos = null;
     private int inspectTicksLeft = 0;
 
@@ -89,6 +93,9 @@ public class Familiar {
     public void setRoamEnabled(boolean enabled) {
         this.roamEnabled = enabled;
         this.roamGoal = null;
+        this.roamPauseTicks = 0;
+        this.standFreeWillActionTimer = 0;
+        this.standFreeWillPose = null;
         this.inspectFocusPos = null;
         this.inspectTicksLeft = 0;
     }
@@ -128,6 +135,10 @@ public class Familiar {
         this.boundStandUuid = stand.getUUID();
         this.initializedFlags = false;
         this.mode = FamiliarMode.IDLE;
+        this.roamGoal = null;
+        this.roamPauseTicks = 0;
+        this.standFreeWillActionTimer = 0;
+        this.standFreeWillPose = null;
         this.currentPose.bodyYaw = stand.getYRot();
 
         Vec3 headPos = stand.position().add(0, 1.65, 0);
@@ -164,12 +175,18 @@ public class Familiar {
     public void setMode(FamiliarMode newMode) {
         this.mode = newMode;
         this.actionTimer = 0;
+        if (newMode != FamiliarMode.IDLE) {
+            this.standFreeWillActionTimer = 0;
+            this.standFreeWillPose = null;
+        }
     }
 
     public void triggerBow(Vec3 lookTarget) {
         this.mode = FamiliarMode.BOW;
         this.pointTarget = lookTarget;
         this.actionTimer = 55;
+        this.standFreeWillActionTimer = 0;
+        this.standFreeWillPose = null;
     }
 
     public void triggerPoint(Vec3 target) {
@@ -240,10 +257,11 @@ public class Familiar {
         HiveMemory.getInstance().recordDiscovery("search:" + res.label() + ":" + ((int) res.pos().x >> 2), res.label(), res.pos(), this.name, currentTick, false);
 
         int dist = (int) Math.round(res.distance());
+        String detailTail = res.extraDetails() != null ? " " + res.extraDetails() + "." : "";
         if (res.fromMemoryScout() != null && !res.fromMemoryScout().equalsIgnoreCase(this.name)) {
-            speakToOwner(client, "Наши души сплетены единым эхом, " + h + " — взор " + res.fromMemoryScout() + " уже запечатлел " + res.label() + " в " + dist + " бл. " + res.direction() + ".");
+            speakToOwner(client, "Наши души сплетены единым эхом, " + h + " — взор " + res.fromMemoryScout() + " уже запечатлел " + res.label() + " в " + dist + " бл. " + res.direction() + "." + detailTail);
         } else {
-            speakToOwner(client, "Я отыскал то, что вы желали, " + h + ": " + res.label() + " — примерно в " + dist + " бл. " + res.direction() + ". Мои собратья уже чувствуют этот след.");
+            speakToOwner(client, "Я отыскал то, что вы желали, " + h + ": " + res.label() + " — примерно в " + dist + " бл. " + res.direction() + "." + detailTail);
         }
 
         if (isBound()) {
@@ -294,6 +312,7 @@ public class Familiar {
         Vec3 moveDelta = Vec3.ZERO;
         PoseState desired = PoseState.idle(currentPose.bodyYaw, tickCount);
         Vec3 hiveFocus = HiveMemory.getInstance().getSharedFocusPos(tickCount);
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
 
         switch (mode) {
             case POSSESSED -> {
@@ -323,10 +342,78 @@ public class Familiar {
                 }
             }
             case IDLE -> {
+                double distSq = player.distanceToSqr(stand);
+                boolean ownerLooking = distSq < 18.0 && isPlayerLookingNear(player, standPos.add(0, 1.5, 0), 0.86);
+
                 if (startleTicks > 0) {
                     float yawToPlayer = yawBetween(standPos, player.position());
                     desired = PoseState.jumpscare(yawToPlayer);
                     desired.bodyX = -8.0f;
+                } else if (ownerLooking && (tickCount - lastMandatoryBowTick) > 90L) {
+                    // Mandatory respectful bow to Повелитель whenever approached and looked at
+                    lastMandatoryBowTick = tickCount;
+                    this.mode = FamiliarMode.BOW;
+                    this.pointTarget = player.position();
+                    this.actionTimer = 50;
+                    this.roamGoal = null;
+                    this.standFreeWillActionTimer = 0;
+                    this.standFreeWillPose = null;
+                    desired = PoseState.bow(yawBetween(standPos, player.position()));
+                } else if (roamEnabled) {
+                    // Stand free-will: autonomous walks + characterful pauses & gestures
+                    if (roamGoal == null || roamGoal.distanceTo(player.position()) > 19.5) {
+                        if (roamPauseTicks <= 0) {
+                            roamPauseTicks = switch (mood) {
+                                case MISCHIEVOUS -> 25 + rng.nextInt(35);
+                                case MELANCHOLIC -> 55 + rng.nextInt(70);
+                                default -> 35 + rng.nextInt(55);
+                            };
+                        }
+                        roamPauseTicks--;
+
+                        if (roamPauseTicks <= 0) {
+                            roamGoal = WorldScout.pickInterestingRoamTarget(level, player, standPos);
+                            standFreeWillActionTimer = 0;
+                            standFreeWillPose = null;
+                        } else {
+                            if (standFreeWillActionTimer <= 0) {
+                                standFreeWillActionTimer = 35 + rng.nextInt(45);
+                                float lookYaw = currentPose.bodyYaw + (rng.nextFloat() - 0.5f) * 90.0f;
+                                if (mood == FamiliarMood.PHILOSOPHICAL && rng.nextDouble() < 0.45) {
+                                    standFreeWillPose = PoseState.think(lookYaw, tickCount);
+                                } else if (mood == FamiliarMood.DEVOTED && findNearestThreat(level, player, standPos, 10.0) != null) {
+                                    standFreeWillPose = PoseState.guard(yawBetween(standPos, findNearestThreat(level, player, standPos, 10.0).position()), 0f, 0f, tickCount);
+                                } else if (mood == FamiliarMood.MISCHIEVOUS && rng.nextDouble() < 0.30) {
+                                    standFreeWillPose = PoseState.applaud(lookYaw, tickCount);
+                                } else {
+                                    PoseState p = PoseState.idle(lookYaw, tickCount);
+                                    p.headY = (rng.nextFloat() - 0.5f) * 34.0f;
+                                    standFreeWillPose = p;
+                                }
+                            } else {
+                                standFreeWillActionTimer--;
+                            }
+                            desired = standFreeWillPose != null ? standFreeWillPose : PoseState.idle(currentPose.bodyYaw, tickCount);
+                        }
+                    }
+
+                    if (roamGoal != null) {
+                        Vec3 diff = roamGoal.subtract(standPos);
+                        double horizDist = Math.hypot(diff.x, diff.z);
+                        if (horizDist > 0.32 || Math.abs(diff.y) > 0.35) {
+                            float walkYaw = yawBetween(standPos, roamGoal);
+                            double speed = (mood == FamiliarMood.MISCHIEVOUS) ? 0.16 : (mood == FamiliarMood.MELANCHOLIC ? 0.09 : 0.12);
+                            double stepX = Mth.clamp(diff.x * 0.22, -speed, speed);
+                            double stepZ = Mth.clamp(diff.z * 0.22, -speed, speed);
+                            double stepY = Mth.clamp(diff.y * 0.18, -0.10, 0.10);
+                            moveDelta = new Vec3(stepX, stepY, stepZ);
+                            desired = PoseState.march(walkYaw, tickCount * 0.7f, true);
+                        } else {
+                            roamGoal = null;
+                            roamPauseTicks = 40 + rng.nextInt(55);
+                            desired = PoseState.idle(currentPose.bodyYaw, tickCount);
+                        }
+                    }
                 } else if (hiveFocus != null && hiveFocus.distanceToSqr(standPos) < 625.0) {
                     float yawToDiscovery = yawBetween(standPos, hiveFocus);
                     float pitchToDiscovery = pitchBetween(standPos.add(0, 1.5, 0), hiveFocus);
@@ -334,13 +421,7 @@ public class Familiar {
                     desired.headX = Mth.clamp(pitchToDiscovery, -40.0f, 40.0f);
                     desired.headY = 0.0f;
                 } else {
-                    double distSq = player.distanceToSqr(stand);
-                    if (distSq < 16.0 && isPlayerLookingNear(player, standPos.add(0, 1.5, 0), 0.88)) {
-                        float yawToOwner = yawBetween(standPos, player.position());
-                        desired = PoseState.bow(yawToOwner);
-                    } else {
-                        desired = PoseState.idle(currentPose.bodyYaw, tickCount);
-                    }
+                    desired = PoseState.idle(currentPose.bodyYaw, tickCount);
                 }
             }
             case BOW -> {
@@ -401,7 +482,6 @@ public class Familiar {
             case DANCE -> {
                 desired = PoseState.dance(player.getYRot() + 180.0f, tickCount);
                 if (tickCount % 6 == 0) {
-                    ThreadLocalRandom rng = ThreadLocalRandom.current();
                     level.addParticle(ParticleTypes.NOTE,
                             standPos.x + (rng.nextDouble() - 0.5) * 1.1,
                             standPos.y + 1.9 + rng.nextDouble() * 0.4,
@@ -525,6 +605,7 @@ public class Familiar {
 
         if (canSendPacket) {
             boolean needsMoveFlags = !initializedFlags
+                    || (mode == FamiliarMode.IDLE && roamEnabled)
                     || mode == FamiliarMode.FOLLOW
                     || mode == FamiliarMode.SCARE
                     || mode == FamiliarMode.POSSESSED

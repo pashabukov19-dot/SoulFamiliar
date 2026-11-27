@@ -3,7 +3,7 @@
   "id": "soulfamiliar",
   "version": "${version}",
   "name": "Soul Familiar",
-  "description": "Client-side D&D familiar addon for Armor Poser with Groq AI context-aware dialogue, auto-model discovery, proxy support, shared soul-thread memory, and chess.",
+  "description": "Client-side D&D familiar addon for Armor Poser with Groq AI context-aware dialogue, intent tags, stand free-will roaming, ground loot awareness, opened-chest memory, and chess.",
   "authors": [
     "SoulFamiliar"
   ],

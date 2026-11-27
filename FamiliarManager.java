@@ -2,6 +2,8 @@ package com.soulfamiliar;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -9,9 +11,13 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.EnderChestBlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -33,6 +39,9 @@ public class FamiliarManager {
     private long tickCounter = 0;
     private int roundRobinIndex = 0;
     private String possessingFamiliarKey = null;
+    private BlockPos pendingChestPos = null;
+    private String pendingChestTitle = null;
+    private boolean recordedCurrentScreen = false;
 
     public static FamiliarManager getInstance() {
         return INSTANCE;
@@ -185,8 +194,12 @@ public class FamiliarManager {
                 f.discardEtherealVisual();
             }
             possessingFamiliarKey = null;
+            pendingChestPos = null;
+            recordedCurrentScreen = false;
             return;
         }
+
+        trackOpenedContainer(client);
 
         if (possessingFamiliarKey != null) {
             Familiar active = familiars.get(possessingFamiliarKey);
@@ -223,6 +236,69 @@ public class FamiliarManager {
             int idxForSlot = isEthereal ? etherealIdx++ : 0;
             boolean allowSend = packetWindow && (i == chosenForPacket);
             f.tick(client, idxForSlot, totalEthereal, i, groupTotal, tickCounter, allowSend);
+        }
+    }
+
+    private void trackOpenedContainer(Minecraft client) {
+        if (client.player == null || client.level == null) return;
+
+        if (!(client.screen instanceof ContainerScreen containerScreen)) {
+            recordedCurrentScreen = false;
+            return;
+        }
+
+        if (pendingChestPos == null) {
+            Vec3 eye = client.player.getEyePosition();
+            Vec3 end = eye.add(client.player.getLookAngle().scale(6.5));
+            BlockHitResult hit = client.level.clip(new ClipContext(
+                    eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, client.player
+            ));
+            if (hit.getType() == HitResult.Type.BLOCK) {
+                BlockPos bp = hit.getBlockPos();
+                BlockEntity be = client.level.getBlockEntity(bp);
+                if (be instanceof ChestBlockEntity || be instanceof EnderChestBlockEntity) {
+                    pendingChestPos = bp.immutable();
+                    pendingChestTitle = containerScreen.getTitle().getString();
+                } else {
+                    pendingChestPos = bp.immutable();
+                    pendingChestTitle = containerScreen.getTitle().getString();
+                }
+            }
+        }
+
+        if (pendingChestPos != null && !recordedCurrentScreen) {
+            List<Slot> slots = containerScreen.getMenu().slots;
+            int totalSlots = slots.size();
+            int containerSlotCount = totalSlots > 36 ? totalSlots - 36 : totalSlots;
+            if (containerSlotCount <= 0) return;
+
+            Map<String, Integer> aggregated = new LinkedHashMap<>();
+            boolean anyNonEmpty = false;
+            for (int i = 0; i < containerSlotCount; i++) {
+                ItemStack st = slots.get(i).getItem();
+                if (!st.isEmpty()) {
+                    anyNonEmpty = true;
+                    String itemName = st.getHoverName().getString();
+                    aggregated.merge(itemName, st.getCount(), Integer::sum);
+                }
+            }
+
+            if (anyNonEmpty || tickCounter % 10 == 0) {
+                List<String> summary = new ArrayList<>();
+                for (Map.Entry<String, Integer> e : aggregated.entrySet()) {
+                    summary.add(e.getKey() + " x" + e.getValue());
+                }
+                HiveMemory.getInstance().recordOpenedChest(
+                        pendingChestPos,
+                        client.level.dimension(),
+                        pendingChestTitle,
+                        summary,
+                        tickCounter
+                );
+                if (anyNonEmpty) {
+                    recordedCurrentScreen = true;
+                }
+            }
         }
     }
 

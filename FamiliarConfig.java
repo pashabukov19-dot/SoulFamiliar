@@ -53,7 +53,6 @@ public final class FamiliarConfig {
             this.apiUrl = props.getProperty("api_url", DEFAULT_GROQ_URL).trim();
             this.apiKey = props.getProperty("api_key", "").trim();
             String loadedPrimary = props.getProperty("primary_model", DEFAULT_PRIMARY_MODEL).trim();
-            // Auto-migrate retired 2026 free-tier Llama IDs to active Groq free models
             if (loadedPrimary.equals("llama-3.3-70b-versatile") || loadedPrimary.equals("llama-3.1-8b-instant")) {
                 loadedPrimary = DEFAULT_PRIMARY_MODEL;
             }

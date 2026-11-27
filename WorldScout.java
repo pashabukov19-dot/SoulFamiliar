@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
@@ -33,7 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class WorldScout {
     private WorldScout() {}
 
-    public record SearchResult(String label, Vec3 pos, double distance, String direction, String fromMemoryScout) {}
+    public record SearchResult(String label, Vec3 pos, double distance, String direction, String fromMemoryScout, String extraDetails) {}
 
     public record Discovery(String uniqueKey, String label, Vec3 pos, boolean isDanger) {}
 
@@ -55,6 +56,31 @@ public final class WorldScout {
             facts.add("В руке Повелителя: " + owner.getMainHandItem().getHoverName().getString());
         }
 
+        List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, owner.getBoundingBox().inflate(18.0), Entity::isAlive);
+        if (!drops.isEmpty()) {
+            List<String> dropNames = new ArrayList<>();
+            for (int i = 0; i < Math.min(4, drops.size()); i++) {
+                ItemEntity ie = drops.get(i);
+                ItemStack st = ie.getItem();
+                if (!st.isEmpty()) {
+                    dropNames.add(st.getHoverName().getString() + " x" + st.getCount());
+                }
+            }
+            if (!dropNames.isEmpty()) {
+                facts.add("Дроп на земле рядом: " + String.join(", ", dropNames));
+            }
+        }
+
+        List<HiveMemory.OpenedChestRecord> chests = HiveMemory.getInstance().getRecentOpenedChests(level.dimension(), 3);
+        if (!chests.isEmpty()) {
+            List<String> chestNotes = new ArrayList<>();
+            for (HiveMemory.OpenedChestRecord rec : chests) {
+                String content = rec.itemsSummary().isEmpty() ? "пусто" : String.join(", ", rec.itemsSummary().subList(0, Math.min(5, rec.itemsSummary().size())));
+                chestNotes.add(rec.containerTitle() + " [" + rec.pos().getX() + ", " + rec.pos().getY() + ", " + rec.pos().getZ() + "]: " + content);
+            }
+            facts.add("Содержимое открытых Повелителем сундуков: " + String.join(" | ", chestNotes));
+        }
+
         List<String> nearPlayers = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.distanceToSqr(owner) <= 900.0) {
@@ -67,7 +93,7 @@ public final class WorldScout {
         }
 
         List<Entity> mobs = level.getEntities(owner, owner.getBoundingBox().inflate(16.0), e ->
-                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
+                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand) && !(e instanceof ItemEntity)
         );
         if (!mobs.isEmpty()) {
             mobs.sort(Comparator.comparingDouble(e -> e.distanceToSqr(owner)));
@@ -93,7 +119,7 @@ public final class WorldScout {
         if (level == null || owner == null) return null;
 
         List<Entity> threats = level.getEntities(owner, owner.getBoundingBox().inflate(10.0), e ->
-                e.isAlive() && e != owner && !(e instanceof ArmorStand) && (e instanceof Enemy || e instanceof Player)
+                e.isAlive() && e != owner && !(e instanceof ArmorStand) && !(e instanceof ItemEntity) && (e instanceof Enemy || e instanceof Player)
         );
         for (Entity e : threats) {
             if (e instanceof Creeper) {
@@ -110,6 +136,14 @@ public final class WorldScout {
             if (e instanceof Enemy && e.distanceToSqr(owner) < 49.0) {
                 return new Discovery("entity:" + e.getUUID(), e.getName().getString(), e.getEyePosition(), true);
             }
+        }
+
+        List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(origin, origin).inflate(12.0), e -> e.isAlive() && !e.getItem().isEmpty());
+        for (ItemEntity ie : drops) {
+            ItemStack st = ie.getItem();
+            String itemLabel = st.getHoverName().getString() + (st.getCount() > 1 ? " (x" + st.getCount() + ")" : "");
+            String dropKey = "drop:" + ie.getUUID();
+            return new Discovery(dropKey, "предмет на земле: " + itemLabel, ie.position().add(0, 0.25, 0), false);
         }
 
         BlockPos center = BlockPos.containing(origin);
@@ -153,6 +187,19 @@ public final class WorldScout {
             sections.add("Прямо перед моим взором — " + directSight);
         }
 
+        List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(eyeOrigin, eyeOrigin).inflate(16.0), e -> e.isAlive() && !e.getItem().isEmpty());
+        if (!drops.isEmpty()) {
+            drops.sort(Comparator.comparingDouble(e -> e.position().distanceToSqr(eyeOrigin)));
+            List<String> dropNotes = new ArrayList<>();
+            for (int i = 0; i < Math.min(4, drops.size()); i++) {
+                ItemEntity ie = drops.get(i);
+                ItemStack st = ie.getItem();
+                int dist = (int) Math.round(Math.sqrt(ie.position().distanceToSqr(owner.position())));
+                dropNotes.add(st.getHoverName().getString() + " x" + st.getCount() + " (" + dist + " бл. " + relativeDirection(owner, ie.position()) + ")");
+            }
+            sections.add("На земле лежит: " + String.join(", ", dropNotes));
+        }
+
         List<Player> players = new ArrayList<>();
         for (Player p : level.players()) {
             if (p != owner && p.isAlive() && p.position().distanceToSqr(eyeOrigin) <= 484.0) {
@@ -174,7 +221,7 @@ public final class WorldScout {
         }
 
         List<Entity> mobs = level.getEntities(owner, new AABB(eyeOrigin, eyeOrigin).inflate(18.0), e ->
-                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand)
+                e.isAlive() && e != owner && !(e instanceof Player) && !(e instanceof ArmorStand) && !(e instanceof ItemEntity)
         );
         if (!mobs.isEmpty()) {
             mobs.sort(Comparator.comparingDouble(e -> e.position().distanceToSqr(eyeOrigin)));
@@ -224,7 +271,7 @@ public final class WorldScout {
         }
 
         if (sections.isEmpty()) {
-            return "Вокруг тихо и безлюдно — ни ценных залежей, ни живых душ поблизости не видно.";
+            return "Вокруг тихо и безлюдно — ни ценных залежей, ни дропа, ни живых душ поблизости не видно.";
         }
 
         return String.join(". ", sections) + ".";
@@ -263,6 +310,10 @@ public final class WorldScout {
         if (entityHit != null && entityDistSq <= blockDistSq) {
             Entity target = entityHit.getEntity();
             int dist = (int) Math.round(Math.sqrt(entityDistSq));
+            if (target instanceof ItemEntity ie && !ie.getItem().isEmpty()) {
+                ItemStack st = ie.getItem();
+                return "лежащий предмет «" + st.getHoverName().getString() + "» x" + st.getCount() + " на расстоянии " + dist + " бл.";
+            }
             StringBuilder sb = new StringBuilder();
             sb.append(target.getName().getString()).append(" (дистанция ").append(dist).append(" бл.");
             if (target instanceof LivingEntity le) {
@@ -297,12 +348,30 @@ public final class WorldScout {
         String q = rawQuery.toLowerCase(Locale.ROOT).replace("?", "").replace("!", "").trim();
         if (q.isEmpty()) return null;
 
+        // 1. Check opened chests memory first if user asks about items inside chests or a chest
+        HiveMemory.OpenedChestRecord chestRec = HiveMemory.getInstance().searchOpenedChests(q, level.dimension(), owner.position());
+        if (chestRec != null) {
+            Vec3 chestCenter = Vec3.atCenterOf(chestRec.pos());
+            double dist = owner.getEyePosition().distanceTo(chestCenter);
+            String itemsStr = chestRec.itemsSummary().isEmpty() ? "пусто" : String.join(", ", chestRec.itemsSummary());
+            return new SearchResult(
+                    chestRec.containerTitle() + " [" + chestRec.pos().getX() + ", " + chestRec.pos().getY() + ", " + chestRec.pos().getZ() + "]",
+                    chestCenter,
+                    dist,
+                    relativeDirection(owner, chestCenter),
+                    null,
+                    "Внутри (по памяти открытия): " + itemsStr
+            );
+        }
+
+        // 2. Check shared HiveMemory discoveries
         HiveMemory.MemoryEntry mem = HiveMemory.getInstance().searchMemory(q, owner.position(), currentTick);
         if (mem != null) {
             double dist = owner.getEyePosition().distanceTo(mem.pos());
-            return new SearchResult(mem.label(), mem.pos(), dist, relativeDirection(owner, mem.pos()), mem.discoveredBy());
+            return new SearchResult(mem.label(), mem.pos(), dist, relativeDirection(owner, mem.pos()), mem.discoveredBy(), null);
         }
 
+        // 3. Check players
         Player bestPlayer = null;
         double bestPlayerDist = 45.0 * 45.0;
         for (Player p : level.players()) {
@@ -318,14 +387,34 @@ public final class WorldScout {
         }
         if (bestPlayer != null) {
             double dist = owner.getEyePosition().distanceTo(bestPlayer.getEyePosition());
-            return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()), null);
+            return new SearchResult("игрок " + bestPlayer.getName().getString(), bestPlayer.getEyePosition(), dist, relativeDirection(owner, bestPlayer.position()), null, null);
         }
 
+        // 4. Check ground item drops (ItemEntity)
+        ItemEntity bestDrop = null;
+        double bestDropDist = 34.0 * 34.0;
+        for (ItemEntity ie : level.getEntitiesOfClass(ItemEntity.class, new AABB(searchOrigin, searchOrigin).inflate(34.0), e -> e.isAlive() && !e.getItem().isEmpty())) {
+            String itemName = ie.getItem().getHoverName().getString().toLowerCase(Locale.ROOT);
+            if (itemName.contains(q) || q.contains(itemName) || q.contains("дроп") || q.contains("предмет") || q.contains("лежит") || q.contains("вещ")) {
+                double d = ie.position().distanceToSqr(searchOrigin);
+                if (d < bestDropDist) {
+                    bestDropDist = d;
+                    bestDrop = ie;
+                }
+            }
+        }
+        if (bestDrop != null) {
+            ItemStack st = bestDrop.getItem();
+            double dist = owner.getEyePosition().distanceTo(bestDrop.position());
+            return new SearchResult("дроп «" + st.getHoverName().getString() + "» x" + st.getCount(), bestDrop.position(), dist, relativeDirection(owner, bestDrop.position()), null, null);
+        }
+
+        // 5. Check living entities / mobs
         String entityHint = mapRussianEntityHint(q);
         Entity bestEntity = null;
         double bestEntityDist = 36.0 * 36.0;
         for (Entity e : level.getEntities(owner, new AABB(searchOrigin, searchOrigin).inflate(36.0), ent ->
-                ent.isAlive() && ent != owner && !(ent instanceof ArmorStand)
+                ent.isAlive() && ent != owner && !(ent instanceof ArmorStand) && !(ent instanceof ItemEntity)
         )) {
             String eName = e.getName().getString().toLowerCase(Locale.ROOT);
             String eType = e.getType().toString().toLowerCase(Locale.ROOT);
@@ -341,9 +430,10 @@ public final class WorldScout {
         }
         if (bestEntity != null) {
             double dist = owner.getEyePosition().distanceTo(bestEntity.getEyePosition());
-            return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()), null);
+            return new SearchResult(bestEntity.getName().getString(), bestEntity.getEyePosition(), dist, relativeDirection(owner, bestEntity.position()), null, null);
         }
 
+        // 6. Check blocks
         BlockPos center = BlockPos.containing(searchOrigin);
         BlockPos bestBlockPos = null;
         String bestBlockLabel = null;
@@ -372,7 +462,7 @@ public final class WorldScout {
         if (bestBlockPos != null) {
             Vec3 pos = Vec3.atCenterOf(bestBlockPos);
             double dist = owner.getEyePosition().distanceTo(pos);
-            return new SearchResult(bestBlockLabel, pos, dist, relativeDirection(owner, pos), null);
+            return new SearchResult(bestBlockLabel, pos, dist, relativeDirection(owner, pos), null, null);
         }
 
         return null;
@@ -393,7 +483,7 @@ public final class WorldScout {
         Entity best = null;
         double bestDist = 32.0 * 32.0;
         for (Entity e : level.getEntities(owner, new AABB(owner.position(), owner.position()).inflate(32.0), ent ->
-                ent.isAlive() && ent != owner && !(ent instanceof ArmorStand)
+                ent.isAlive() && ent != owner && !(ent instanceof ArmorStand) && !(ent instanceof ItemEntity)
         )) {
             String eName = e.getName().getString().toLowerCase(Locale.ROOT);
             String eType = e.getType().toString().toLowerCase(Locale.ROOT);
@@ -412,37 +502,67 @@ public final class WorldScout {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
         if (level == null || owner == null) return currentPos;
 
-        if (rng.nextDouble() < 0.55) {
-            List<Entity> nearby = level.getEntities(owner, owner.getBoundingBox().inflate(20.0), e ->
-                    e.isAlive() && e != owner && !(e instanceof ArmorStand)
+        if (rng.nextDouble() < 0.72) {
+            List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(currentPos, currentPos).inflate(14.0), e -> e.isAlive() && !e.getItem().isEmpty());
+            if (!drops.isEmpty()) {
+                ItemEntity chosenDrop = drops.get(rng.nextInt(drops.size()));
+                return chosenDrop.position().add((rng.nextDouble() - 0.5) * 1.2, 0.3, (rng.nextDouble() - 0.5) * 1.2);
+            }
+
+            List<Entity> nearby = level.getEntities(owner, owner.getBoundingBox().inflate(16.0), e ->
+                    e.isAlive() && e != owner && !(e instanceof ArmorStand) && !(e instanceof ItemEntity)
             );
             if (!nearby.isEmpty()) {
                 Entity chosen = nearby.get(rng.nextInt(nearby.size()));
-                return chosen.getEyePosition().add((rng.nextDouble() - 0.5) * 1.6, 0.85, (rng.nextDouble() - 0.5) * 1.6);
+                return chosen.position().add((rng.nextDouble() - 0.5) * 2.2, 0.0, (rng.nextDouble() - 0.5) * 2.2);
             }
 
-            BlockPos base = owner.blockPosition();
+            BlockPos base = BlockPos.containing(currentPos);
             for (int attempt = 0; attempt < 36; attempt++) {
-                BlockPos sample = base.offset(rng.nextInt(-20, 21), rng.nextInt(-6, 9), rng.nextInt(-20, 21));
+                BlockPos sample = base.offset(rng.nextInt(-10, 11), rng.nextInt(-3, 4), rng.nextInt(-10, 11));
                 if (classifyNotableBlock(level.getBlockState(sample)) != null) {
-                    return Vec3.atCenterOf(sample).add(0, 1.2, 0);
+                    return Vec3.atCenterOf(sample);
                 }
             }
         }
 
-        for (int attempt = 0; attempt < 16; attempt++) {
+        for (int attempt = 0; attempt < 18; attempt++) {
             double angle = rng.nextDouble() * Math.PI * 2.0;
-            double radius = 3.5 + rng.nextDouble() * 18.0;
-            double tx = owner.getX() + Math.cos(angle) * radius;
-            double ty = owner.getY() + 0.8 + rng.nextDouble() * 5.0;
-            double tz = owner.getZ() + Math.sin(angle) * radius;
-            BlockPos bp = BlockPos.containing(tx, ty, tz);
-            if (level.getBlockState(bp).isAir()) {
-                return new Vec3(tx, ty, tz);
+            double radius = 2.0 + rng.nextDouble() * 7.5;
+            double tx = currentPos.x + Math.cos(angle) * radius;
+            double tz = currentPos.z + Math.sin(angle) * radius;
+            if (Math.hypot(tx - owner.getX(), tz - owner.getZ()) > 18.0) continue;
+            BlockPos walkPos = findWalkableGroundNear(level, tx, currentPos.y, tz);
+            if (walkPos != null) {
+                return new Vec3(walkPos.getX() + 0.5, walkPos.getY() + 1.0, walkPos.getZ() + 0.5);
             }
         }
 
-        return owner.position().add(2.0, 2.2, 2.0);
+        return new Vec3(currentPos.x + 1.5, currentPos.y, currentPos.z + 1.5);
+    }
+
+    private static BlockPos findWalkableGroundNear(ClientLevel level, double x, double refY, double z) {
+        int bx = MthFloor(x);
+        int bz = MthFloor(z);
+        int startY = MthFloor(refY) + 2;
+        int minY = MthFloor(refY) - 4;
+        for (int y = startY; y >= minY; y--) {
+            BlockPos below = new BlockPos(bx, y - 1, bz);
+            BlockPos at = new BlockPos(bx, y, bz);
+            BlockPos above = new BlockPos(bx, y + 1, bz);
+            if (!level.getBlockState(below).isAir()
+                    && level.getBlockState(below).isSolid()
+                    && level.getBlockState(at).isAir()
+                    && level.getBlockState(above).isAir()) {
+                return below;
+            }
+        }
+        return null;
+    }
+
+    private static int MthFloor(double v) {
+        int i = (int) v;
+        return v < i ? i - 1 : i;
     }
 
     public static String relativeDirection(LocalPlayer observer, Vec3 target) {

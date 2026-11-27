@@ -2,7 +2,7 @@ plugins {
     id 'net.fabricmc.fabric-loom' version '1.20.0-alpha.31'
 }
 
-version = "1.5.3"
+version = "1.6.0"
 group = "com.soulfamiliar"
 
 base {
@@ -20,7 +20,7 @@ repositories {
 dependencies {
     minecraft "com.mojang:minecraft:26.3"
     implementation "net.fabricmc:fabric-loader:0.20.1"
-    implementation "net.fabricmc.fabric-api:fabric-api:0.167.0+26.3"
+    implementation "net.fabricmc:fabric-api:0.167.0+26.3"
     compileOnly files("libs/ArmorPoser-fabric-26.3-16.0.2.jar")
 }
 

@@ -208,8 +208,9 @@ public final class ChatCommandParser {
         }
         if (lower.contains("общая память") || lower.contains("коллективный разум") || lower.contains("что вы знаете") || lower.contains("что помните") || lower.contains("находк")) {
             List<HiveMemory.MemoryEntry> entries = HiveMemory.getInstance().getRecentEntries(currentTick, 5);
+            List<HiveMemory.OpenedChestRecord> chests = HiveMemory.getInstance().getRecentOpenedChests(client.level.dimension(), 3);
             String h = FamiliarDialogueEngine.randomHonorific();
-            if (entries.isEmpty()) {
+            if (entries.isEmpty() && chests.isEmpty()) {
                 targets.get(0).speakToOwner(client, "В памяти наших душ пока не запечатлено ни одной тайны, " + h + ". Мы продолжаем неспешный дозор.");
             } else {
                 List<String> notes = new ArrayList<>();
@@ -217,6 +218,10 @@ public final class ChatCommandParser {
                     int dist = (int) Math.round(client.player.getEyePosition().distanceTo(e.pos()));
                     String dir = WorldScout.relativeDirection(client.player, e.pos());
                     notes.add(e.label() + " (" + dist + " бл. " + dir + ", приметил " + e.discoveredBy() + ")");
+                }
+                for (HiveMemory.OpenedChestRecord rec : chests) {
+                    String content = rec.itemsSummary().isEmpty() ? "пусто" : String.join(", ", rec.itemsSummary().subList(0, Math.min(4, rec.itemsSummary().size())));
+                    notes.add(rec.containerTitle() + " [" + rec.pos().getX() + "," + rec.pos().getY() + "," + rec.pos().getZ() + "]: " + content);
                 }
                 targets.get(0).speakToOwner(client, "Вот что сохранили наши тени в едином эфире, " + h + ": " + String.join("; ", notes) + ".");
             }

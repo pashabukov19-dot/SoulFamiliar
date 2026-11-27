@@ -8,7 +8,6 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -157,12 +156,14 @@ public final class FamiliarDialogueEngine {
         String task = (isPrivateWhisper
                 ? "Повелитель мысленно обращается к тебе (тайно от других игроков): «" + masterMessage + "». "
                 : "Повелитель обратился к тебе в чате: «" + masterMessage + "». ")
-                + "Ответь ему живо, остроумно, осмысленно и в характере, учитывая обстановку вокруг и контекст недавнего чата.";
+                + "Ответь ему живо, остроумно, осмысленно и в характере, учитывая обстановку вокруг, дроп на земле, открытые сундуки и контекст чата. "
+                + "Если Повелитель просит походить, осмотреться, посторожить, следовать, остановиться или принять позу — поставь соответствующий [ACTION:...] тег.";
 
         GroqBrain.getInstance().askFamiliarAsync(
                 client, speaker, all, worldCtx, transcript, task,
                 reply -> {
                     applyGestureTag(speaker, reply.gestureTag());
+                    applyActionTag(client, speaker, reply.actionTag());
                     rememberLine(reply.text());
                     speaker.speakToOwner(client, reply.text());
                     recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
@@ -259,7 +260,7 @@ public final class FamiliarDialogueEngine {
 
             if (FamiliarConfig.getInstance().hasActiveAi()) {
                 String worldCtx = WorldScout.buildCompactAiWorldSummary(level, owner, scout, tickCounter);
-                String task = "Во время разведки ты обнаружил ценность: " + found.label() + " на расстоянии " + dist + " бл. (" + dir + ") от Повелителя. "
+                String task = "Во время разведки ты обнаружил находку: " + found.label() + " на расстоянии " + dist + " бл. (" + dir + ") от Повелителя. "
                         + "Доложи ему об этой находке в своём характере, обращаясь «Повелитель» или «Господин».";
                 GroqBrain.getInstance().askFamiliarAsync(
                         client, scout, all, worldCtx, getChatTranscript(), task,
@@ -355,6 +356,7 @@ public final class FamiliarDialogueEngine {
                     client, speaker, all, worldCtx, transcript, task,
                     reply -> {
                         applyGestureTag(speaker, reply.gestureTag());
+                        applyActionTag(client, speaker, reply.actionTag());
                         rememberLine(reply.text());
                         speaker.speakToOwner(client, reply.text());
                         recordChatLine("[Дух " + speaker.getName() + "]: " + reply.text());
@@ -403,6 +405,26 @@ public final class FamiliarDialogueEngine {
             case "APPLAUD" -> speaker.setMode(FamiliarMode.APPLAUD);
             case "THREATEN" -> speaker.setMode(FamiliarMode.THREATEN);
             case "DANCE" -> speaker.setMode(FamiliarMode.DANCE);
+        }
+    }
+
+    private void applyActionTag(Minecraft client, Familiar speaker, String actionTag) {
+        if (actionTag == null || speaker == null) return;
+        switch (actionTag) {
+            case "ACTION:ROAM" -> {
+                speaker.setRoamEnabled(true);
+                speaker.setMode(FamiliarMode.IDLE);
+            }
+            case "ACTION:GUARD" -> speaker.setMode(FamiliarMode.GUARD);
+            case "ACTION:FOLLOW" -> speaker.setMode(FamiliarMode.FOLLOW);
+            case "ACTION:STAY" -> {
+                speaker.setRoamEnabled(false);
+                speaker.setMode(FamiliarMode.IDLE);
+            }
+            case "ACTION:THINK" -> speaker.setMode(FamiliarMode.THINK);
+            case "ACTION:KNEEL" -> speaker.setMode(FamiliarMode.KNEEL);
+            case "ACTION:MEDITATE" -> speaker.setMode(FamiliarMode.MEDITATE);
+            case "ACTION:DANCE" -> speaker.setMode(FamiliarMode.DANCE);
         }
     }
 
@@ -608,9 +630,9 @@ public final class FamiliarDialogueEngine {
 
     private String buildLootLine(String h, String lootLabel, int dist, String dir) {
         return pickFreshLine(List.of(
-                "Спешу доложить, " + h + "! Я уловил отблеск тайны: " + lootLabel + " в " + dist + " бл. " + dir + ". Остальные тени уже чувствуют мой зов.",
-                "Благоприятная находка, мой господин! " + lootLabel + " (" + dist + " бл. " + dir + ") — я запечатлел это место в нашем общем эфире.",
-                "Позвольте порадовать вас, Владыка: " + dir + " в " + dist + " бл. сокрыта находка — " + lootLabel + "."
+                "Спешу доложить, " + h + "! Я приметил: " + lootLabel + " в " + dist + " бл. " + dir + ". Остальные тени уже чувствуют мой зов.",
+                "Любопытная находка, мой господин! " + lootLabel + " (" + dist + " бл. " + dir + ") — я запечатлел это в нашем общем эфире.",
+                "Позвольте донести, Владыка: " + dir + " в " + dist + " бл. приметно — " + lootLabel + "."
         ));
     }
 

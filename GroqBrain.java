@@ -21,10 +21,13 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class GroqBrain {
     private static final GroqBrain INSTANCE = new GroqBrain();
     private static final Gson GSON = new Gson();
+    private static final Pattern ACTION_TAG_PATTERN = Pattern.compile("\\[(ACTION:[A-Z_]+)\\]", Pattern.CASE_INSENSITIVE);
 
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
     private volatile String lastWorkingModel = FamiliarConfig.DEFAULT_PRIMARY_MODEL;
@@ -82,7 +85,7 @@ public final class GroqBrain {
         return cachedClient;
     }
 
-    public record AiReply(String text, String gestureTag) {}
+    public record AiReply(String text, String gestureTag, String actionTag) {}
 
     public void testConnectionAsync(Minecraft client) {
         FamiliarConfig cfg = FamiliarConfig.getInstance();
@@ -149,7 +152,7 @@ public final class GroqBrain {
                             }
                             onFallback.run();
                         } else {
-                            AiReply parsed = parseReplyAndGesture(rawContent);
+                            AiReply parsed = parseReplyAndTags(rawContent);
                             if (parsed.text().isBlank()) {
                                 onFallback.run();
                             } else {
@@ -226,7 +229,7 @@ public final class GroqBrain {
             JsonObject root = new JsonObject();
             root.addProperty("model", model);
             root.addProperty("temperature", 0.88);
-            root.addProperty("max_tokens", 180);
+            root.addProperty("max_tokens", 200);
 
             JsonArray messages = new JsonArray();
             JsonObject sysMsg = new JsonObject();
@@ -246,7 +249,7 @@ public final class GroqBrain {
                     .timeout(Duration.ofSeconds(8))
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5.3")
+                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.6.0")
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(root)));
 
             if (apiKey != null && !apiKey.isBlank() && !apiKey.equalsIgnoreCase("none")) {
@@ -304,7 +307,7 @@ public final class GroqBrain {
                     .uri(URI.create(modelsUrl))
                     .timeout(Duration.ofSeconds(6))
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.5.3")
+                    .header("User-Agent", "Mozilla/5.0 SoulFamiliarMod/1.6.0")
                     .GET();
             if (apiKey != null && !apiKey.isBlank() && !apiKey.equalsIgnoreCase("none")) {
                 reqBuilder.header("Authorization", "Bearer " + apiKey);
@@ -356,8 +359,12 @@ public final class GroqBrain {
                 + "2. Всегда обращайся к своему хозяину с почтением и уважением: «Повелитель», «Господин», «мой господин» или «Владыка».\n"
                 + "3. Сохраняй лёгкий аристократический сарказм по отношению к другим игрокам, мобам и опасности, но к Повелителю будь предан.\n"
                 + "4. НИКОГДА не ломай четвёртую стену: не упоминай нейросети, ИИ, код, токены, API, баги или «коллективный разум» как термин — говори об «эфире», «нити душ», «тенях».\n"
-                + "5. По желанию можешь поставить в самом начале ответа ОДИН тег жеста из списка: [NOD], [SHAKE], [BOW], [THINK], [DRAMA], [APPLAUD], [THREATEN], [DANCE] — если он подходит по смыслу.\n"
-                + "6. Не заключай ответ в кавычки — они добавятся автоматически.";
+                + "5. По желанию можешь поставить в самом начале ответа ОДИН тег жеста: [NOD], [SHAKE], [BOW], [THINK], [DRAMA], [APPLAUD], [THREATEN], [DANCE].\n"
+                + "6. Если Повелитель просит тебя о действии/перемещении/поведении из контекста речи, можешь добавить ОДИН тег намерения: "
+                + "[ACTION:ROAM] (пойти побродить/осмотреть окружение), [ACTION:GUARD] (встать на стражу/присматривать), "
+                + "[ACTION:FOLLOW] (держаться рядом/следовать), [ACTION:STAY] (остановиться/побыть на месте), "
+                + "[ACTION:THINK] (задуматься), [ACTION:KNEEL] (преклонить колено), [ACTION:MEDITATE] (медитировать), [ACTION:DANCE] (потанцевать).\n"
+                + "7. Не заключай ответ в кавычки — они добавятся автоматически.";
     }
 
     private static String buildUserPrompt(String worldContext, String chatTranscript, String triggerInstruction) {
@@ -370,9 +377,16 @@ public final class GroqBrain {
         return sb.toString();
     }
 
-    private static AiReply parseReplyAndGesture(String raw) {
+    private static AiReply parseReplyAndTags(String raw) {
         String text = raw.trim();
         String gesture = null;
+        String actionTag = null;
+
+        Matcher actionMatcher = ACTION_TAG_PATTERN.matcher(text);
+        if (actionMatcher.find()) {
+            actionTag = actionMatcher.group(1).toUpperCase(Locale.ROOT);
+            text = actionMatcher.replaceAll("").trim();
+        }
 
         String[] tags = {"[NOD]", "[SHAKE]", "[BOW]", "[THINK]", "[DRAMA]", "[APPLAUD]", "[THREATEN]", "[DANCE]"};
         for (String tag : tags) {
@@ -386,6 +400,6 @@ public final class GroqBrain {
         if ((text.startsWith("«") && text.endsWith("»")) || (text.startsWith("\"") && text.endsWith("\""))) {
             text = text.substring(1, text.length() - 1).trim();
         }
-        return new AiReply(text, gesture);
+        return new AiReply(text, gesture, actionTag);
     }
 }
