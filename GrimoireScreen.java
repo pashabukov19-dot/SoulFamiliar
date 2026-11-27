@@ -20,11 +20,12 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class GrimoireScreen extends Screen {
     public enum Tab {
-        ASH_CHRONICLES("ХРОНИКИ ПЕПЛА"),
-        ETHER_SNAKE("ЭФИРНЫЙ ЗМЕЙ"),
-        SOUL_SUMMON("ПРИЗЫВ ДУШ"),
+        ASH_CHRONICLES("ПЕПЕЛ"),
+        ETHER_SNAKE("ЗМЕЙ"),
+        SOUL_SUMMON("ПРИЗЫВ"),
         DECK_BUILDER("КОЛОДА"),
-        DAILIES("ДЕЙЛИКИ");
+        DAILIES("ДЕЙЛИКИ"),
+        COMMANDS("КОМАНДЫ");
 
         public final String label;
         Tab(String label) { this.label = label; }
@@ -83,8 +84,36 @@ public class GrimoireScreen extends Screen {
     private final List<WishResult> lastWishResults = new ArrayList<>();
     private int wishAnimTicks = 0;
 
-    // --- DECK BUILDER Scroll ---
+    // --- DECK BUILDER & COMMANDS Scroll ---
     private int deckScrollRow = 0;
+    private int commandScrollRow = 0;
+
+    private static final String[][] FAMILIAR_COMMANDS = {
+            {"Восстань [Имя]", "Призвать фамильяра (нужен череп в руке)"},
+            {"[Имя], вселись", "Вселить духа в стойку под прицелом"},
+            {"[Имя], вернись / Вернись", "Выйти из стойки / вернуть зрение себе"},
+            {"Упокойся [Имя]", "Отпустить и развеять фамильяра"},
+            {"[Имя], глаза / клавиша [V]", "Смотреть глазами вселённого фамильяра"},
+            {"Книга в руке + «гримуар»", "Открыть Гримуар (или клавиша [G])"},
+            {"[Имя], осмотрись / что видишь", "Доклад об окружении, мобах, дропе и руде"},
+            {"[Имя], где [предмет/моб/руда]", "Найти ближайшую цель или сундук с вещью"},
+            {"[Имя], что я вижу", "Описать блок или существо под вашим взглядом"},
+            {"[Имя], общая память / находки", "Вспомнить тайны и открытые сундуки свиты"},
+            {"[Имя], погуляй / на плечо", "Отпустить в свободный дозор или вернуть к плечу"},
+            {"[Имя], ко мне / сторожи", "Позвать к себе или поставить на охрану"},
+            {"[Имя], преследуй [цель]", "Незримо следить за мобом или игроком"},
+            {"[Имя], напугай [ник]", "Подкрасться и напугать игрока перед лицом"},
+            {"[Имя], поклон / укажи", "Отвесить поклон или указать рукой на цель"},
+            {"[Имя], танец / колени / медитация", "Эмоции и позы стойки (ещё: аплодисменты, драма, думай)"},
+            {"[Имя], в круг / в шеренгу / марш", "Построение свиты и синхронный шаг"},
+            {"[Имя], замри / вольно", "Зафиксировать позу статуи или вернуть свободу"},
+            {"[Имя], смени настроение", "Переключить характер (Озорной, Философ, Преданный...)"},
+            {"[Имя], молчи / болтай / шутка", "Управление репликами в чате и случайной шуткой"},
+            {"Доска a1 / Доска h8 / Сброс партии", "Разметка шахматной доски 8x8 и сброс фигур"},
+            {"[Имя], e2 на e4 / рокировка", "Ход фигурой (добавь «бьёт» при взятии)"},
+            {".f [сообщение или команда]", "Тихая команда/разговор с духом без отправки в общий чат"},
+            {".f ключ [API_KEY] / статус ии", "Настройка ключа Groq/OpenRouter/Ollama и проверка ИИ"}
+    };
 
     public GrimoireScreen() {
         this(Tab.ASH_CHRONICLES);
@@ -627,6 +656,7 @@ public class GrimoireScreen extends Screen {
             case SOUL_SUMMON -> renderSoulSummon(g, left + 6, contentTop, right - 6, contentBottom, mouseX, mouseY);
             case DECK_BUILDER -> renderDeckBuilder(g, left + 6, contentTop, right - 6, contentBottom, mouseX, mouseY);
             case DAILIES -> renderDailies(g, left + 6, contentTop, right - 6, contentBottom, mouseX, mouseY);
+            case COMMANDS -> renderCommandsTab(g, left + 6, contentTop, right - 6, contentBottom);
         }
 
         super.render(g, mouseX, mouseY, partialTick);
@@ -1002,6 +1032,44 @@ public class GrimoireScreen extends Screen {
         g.drawString(this.font, bLbl, bx + 8, by + 5, ready ? 0xFFFFFFFF : 0xFF78909C, false);
     }
 
+
+    // =========================================================================
+    // TAB 5: COMMANDS REFERENCE RENDER
+    // =========================================================================
+    private void renderCommandsTab(GuiGraphics g, int x1, int y1, int x2, int y2) {
+        int w = x2 - x1;
+        g.fill(x1, y1, x2, y1 + 18, 0xFF141920);
+        g.drawString(this.font, "СВИТОК КОМАНД ФАМИЛЬЯРОВ (" + FAMILIAR_COMMANDS.length + " приказов) • Колёсико: прокрутка", x1 + 6, y1 + 5, 0xFFFFE082, false);
+
+        int listY = y1 + 21;
+        int itemH = 19;
+        int maxRows = Math.max(1, (y2 - listY - 12) / itemH);
+        int maxScroll = Math.max(0, FAMILIAR_COMMANDS.length - maxRows);
+        if (commandScrollRow > maxScroll) commandScrollRow = maxScroll;
+
+        for (int r = 0; r < maxRows; r++) {
+            int idx = commandScrollRow + r;
+            if (idx >= FAMILIAR_COMMANDS.length) break;
+            String[] entry = FAMILIAR_COMMANDS[idx];
+            int ry = listY + r * itemH;
+
+            g.fill(x1, ry, x2, ry + itemH - 2, (idx % 2 == 0) ? 0xFF12171D : 0xFF161C23);
+            drawPixelBorder(g, x1, ry, w, itemH - 2, 0xFF2B353D);
+
+            String cmd = entry[0];
+            String desc = entry[1];
+            int cmdCol = cmd.startsWith(".f") ? 0xFFCE93D8 : 0xFF4DD0E1;
+            g.drawString(this.font, cmd, x1 + 5, ry + 4, cmdCol, false);
+            int cmdW = this.font.width(cmd) + 12;
+            if (cmdW < w - 20) {
+                g.drawString(this.font, "— " + trimToWidth(desc, w - cmdW - 14), x1 + cmdW, ry + 4, 0xFFCFD8DC, false);
+            }
+        }
+
+        String scrollInfo = "Показаны " + (commandScrollRow + 1) + "-" + Math.min(FAMILIAR_COMMANDS.length, commandScrollRow + maxRows) + " из " + FAMILIAR_COMMANDS.length + " • Можно обращаться по имени или «Все, ...»";
+        g.drawString(this.font, scrollInfo, x1 + 5, y2 - 10, 0xFF78909C, false);
+    }
+
     // =========================================================================
     // INPUT HANDLING
     // =========================================================================
@@ -1187,6 +1255,15 @@ public class GrimoireScreen extends Screen {
                 deckScrollRow++;
             } else if (scrollY > 0 && deckScrollRow > 0) {
                 deckScrollRow--;
+            }
+            return true;
+        }
+        if (currentTab == Tab.COMMANDS) {
+            int total = FAMILIAR_COMMANDS.length;
+            if (scrollY < 0 && commandScrollRow < Math.max(0, total - 9)) {
+                commandScrollRow++;
+            } else if (scrollY > 0 && commandScrollRow > 0) {
+                commandScrollRow--;
             }
             return true;
         }

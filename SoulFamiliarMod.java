@@ -2,8 +2,6 @@ package com.soulfamiliar;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -32,24 +30,13 @@ public class SoulFamiliarMod implements ClientModInitializer {
                 KeyMapping.Category.MISC
         ));
 
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommandManager.literal("grimoire").executes(ctx -> {
-                ctx.getSource().getClient().execute(() -> ctx.getSource().getClient().setScreen(new GrimoireScreen()));
-                return 1;
-            }));
-            dispatcher.register(ClientCommandManager.literal("гримуар").executes(ctx -> {
-                ctx.getSource().getClient().execute(() -> ctx.getSource().getClient().setScreen(new GrimoireScreen()));
-                return 1;
-            }));
-        });
-
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (togglePossessViewKey.consumeClick()) {
                 FamiliarManager.getInstance().toggleNextPossessionView(client);
             }
             while (openGrimoireKey.consumeClick()) {
                 if (client.screen == null && client.player != null) {
-                    client.setScreen(new GrimoireScreen());
+                    FamiliarManager.getInstance().requestOpenGrimoire(GrimoireScreen.Tab.ASH_CHRONICLES);
                 }
             }
             FamiliarManager.getInstance().tick(client);

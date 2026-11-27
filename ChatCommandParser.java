@@ -138,7 +138,12 @@ public final class ChatCommandParser {
         if (lower.equals("гримуар") || lower.equals("открой гримуар") || lower.contains("гримуар")
                 || lower.contains("хроники пепла") || lower.contains("призыв душ")
                 || lower.contains("эфирный змей") || lower.contains("змейк")
+                || lower.contains("свиток команд") || lower.contains("список команд")
                 || lower.contains("сыграем") || lower.contains("мини-игр") || lower.contains("дейлик")) {
+            if (!FamiliarManager.isHoldingBook(client.player)) {
+                FamiliarManager.notifyPlayer(client, "Возьми в руку книгу (обычную, с пером, написанную или зачарованную) и напиши «гримуар».", ChatFormatting.YELLOW);
+                return;
+            }
             GrimoireScreen.Tab targetTab = GrimoireScreen.Tab.ASH_CHRONICLES;
             if (lower.contains("змей")) {
                 targetTab = GrimoireScreen.Tab.ETHER_SNAKE;
@@ -148,9 +153,10 @@ public final class ChatCommandParser {
                 targetTab = GrimoireScreen.Tab.DECK_BUILDER;
             } else if (lower.contains("дейлик") || lower.contains("задан") || lower.contains("эфир")) {
                 targetTab = GrimoireScreen.Tab.DAILIES;
+            } else if (lower.contains("команд") || lower.contains("помощ") || lower.contains("справк")) {
+                targetTab = GrimoireScreen.Tab.COMMANDS;
             }
-            final GrimoireScreen.Tab openTab = targetTab;
-            client.execute(() -> client.setScreen(new GrimoireScreen(openTab)));
+            FamiliarManager.getInstance().requestOpenGrimoire(targetTab);
             return;
         }
 

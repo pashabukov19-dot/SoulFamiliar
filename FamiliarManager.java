@@ -42,9 +42,29 @@ public class FamiliarManager {
     private BlockPos pendingChestPos = null;
     private String pendingChestTitle = null;
     private boolean recordedCurrentScreen = false;
+    private GrimoireScreen.Tab pendingGrimoireTab = null;
+    private int pendingGrimoireDelay = 0;
 
     public static FamiliarManager getInstance() {
         return INSTANCE;
+    }
+
+    public void requestOpenGrimoire(GrimoireScreen.Tab tab) {
+        this.pendingGrimoireTab = (tab != null) ? tab : GrimoireScreen.Tab.ASH_CHRONICLES;
+        this.pendingGrimoireDelay = 2;
+    }
+
+    public static boolean isHoldingBook(Player player) {
+        if (player == null) return false;
+        return isBookItem(player.getMainHandItem()) || isBookItem(player.getOffhandItem());
+    }
+
+    private static boolean isBookItem(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        return stack.is(Items.BOOK)
+                || stack.is(Items.WRITTEN_BOOK)
+                || stack.is(Items.WRITABLE_BOOK)
+                || stack.is(Items.ENCHANTED_BOOK);
     }
 
     public long getTickCounter() {
@@ -193,6 +213,13 @@ public class FamiliarManager {
 
     public void tick(Minecraft client) {
         tickCounter++;
+        if (pendingGrimoireTab != null && client.player != null && client.level != null) {
+            if (--pendingGrimoireDelay <= 0) {
+                GrimoireScreen.Tab tabToOpen = pendingGrimoireTab;
+                pendingGrimoireTab = null;
+                client.setScreen(new GrimoireScreen(tabToOpen));
+            }
+        }
         if (client.level == null || client.player == null) {
             for (Familiar f : familiars.values()) {
                 f.discardEtherealVisual();
