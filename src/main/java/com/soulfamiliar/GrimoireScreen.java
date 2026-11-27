@@ -597,11 +597,11 @@ public class GrimoireScreen extends Screen {
 
         // --- TOP HEADER BAR ---
         g.fill(left + 2, top + 2, right - 2, top + 22, 0xFF13181E);
-        g.drawString(this.font, "✦ ГРИМУАР ФАМИЛЬЯРА", left + 8, top + 8, 0xFFFFD700, true);
+        g.text(this.font, "✦ ГРИМУАР ФАМИЛЬЯРА", left + 8, top + 8, 0xFFFFD700, true);
 
         String etherText = "ЭФИР: " + state.getEther() + " ✦ (+" + passiveRate + "/мин | Духов: " + activeCount + ")";
         int etherW = this.font.width(etherText);
-        g.drawString(this.font, etherText, right - etherW - 26, top + 8, 0xFF4DD0E1, true);
+        g.text(this.font, etherText, right - etherW - 26, top + 8, 0xFF4DD0E1, true);
 
         // Close [X] button
         int closeX = right - 18;
@@ -609,7 +609,7 @@ public class GrimoireScreen extends Screen {
         boolean hoverClose = isInside(mouseX, mouseY, closeX, closeY, 14, 14);
         g.fill(closeX, closeY, closeX + 14, closeY + 14, hoverClose ? 0xFFB71C1C : 0xFF2B1A1A);
         drawPixelBorder(g, closeX, closeY, 14, 14, 0xFFE57373);
-        g.drawString(this.font, "X", closeX + 4, closeY + 3, 0xFFFFFFFF, false);
+        g.text(this.font, "X", closeX + 4, closeY + 3, 0xFFFFFFFF, false);
 
         // --- NAVIGATION TABS ---
         Tab[] tabs = Tab.values();
@@ -630,7 +630,7 @@ public class GrimoireScreen extends Screen {
                 lbl = "!" + lbl;
             }
             int lw = this.font.width(lbl);
-            g.drawString(this.font, lbl, tx + (tabW - 2 - lw) / 2, tabAreaY + 4, active ? 0xFFFFE082 : 0xFFB0BEC5, false);
+            g.text(this.font, lbl, tx + (tabW - 2 - lw) / 2, tabAreaY + 4, active ? 0xFFFFE082 : 0xFFB0BEC5, false);
         }
 
         // --- FAMILIAR DIALOGUE STRIP ---
@@ -642,10 +642,10 @@ public class GrimoireScreen extends Screen {
         drawPixelSkullIcon(g, left + 11, chatY + 5, 0xFF4DD0E1);
 
         String speakerTag = "[" + speakerName + "]: ";
-        g.drawString(this.font, speakerTag, left + 29, chatY + 3, 0xFF4DD0E1, false);
+        g.text(this.font, speakerTag, left + 29, chatY + 3, 0xFF4DD0E1, false);
         int tagW = this.font.width(speakerTag);
         String clippedMsg = trimToWidth(familiarComment, boxW - 42 - tagW);
-        g.drawString(this.font, clippedMsg, left + 29 + tagW, chatY + 3, 0xFFE0F2F1, false);
+        g.text(this.font, clippedMsg, left + 29 + tagW, chatY + 3, 0xFFE0F2F1, false);
 
         // --- TAB CONTENT AREA ---
         int contentTop = top + 68;
@@ -675,21 +675,21 @@ public class GrimoireScreen extends Screen {
         String status = "Р." + roundNum
                 + " | Враг:" + gemsStr(enemyGems) + " [" + eTotal + "]"
                 + " vs Ты:" + gemsStr(playerGems) + " [" + pTotal + "]";
-        g.drawString(this.font, status, x1 + 5, y1 + 5, 0xFFFFE082, false);
+        g.text(this.font, status, x1 + 5, y1 + 5, 0xFFFFE082, false);
 
         // Pass button
         int passX = x2 - 118;
         boolean hovPass = isInside(mouseX, mouseY, passX, y1 + 2, 48, 14);
         g.fill(passX, y1 + 2, passX + 48, y1 + 16, playerPassed ? 0xFF263238 : (hovPass ? 0xFF8E24AA : 0xFF4A148C));
         drawPixelBorder(g, passX, y1 + 2, 48, 14, 0xFFCE93D8);
-        g.drawString(this.font, playerPassed ? "ПАС!" : "ПАС", passX + 12, y1 + 5, 0xFFFFFFFF, false);
+        g.text(this.font, playerPassed ? "ПАС!" : "ПАС", passX + 12, y1 + 5, 0xFFFFFFFF, false);
 
         // New Match button
         int newX = x2 - 66;
         boolean hovNew = isInside(mouseX, mouseY, newX, y1 + 2, 62, 14);
         g.fill(newX, y1 + 2, newX + 62, y1 + 16, hovNew ? 0xFF2E7D32 : 0xFF1B5E20);
         drawPixelBorder(g, newX, y1 + 2, 62, 14, 0xFF81C784);
-        g.drawString(this.font, "ЗАНОВО", newX + 11, y1 + 5, 0xFFFFFFFF, false);
+        g.text(this.font, "ЗАНОВО", newX + 11, y1 + 5, 0xFFFFFFFF, false);
 
         // Determine hovered card target row highlight
         CardDef hoveredCard = (hoveredHandIndex >= 0 && hoveredHandIndex < playerHand.size()) ? playerHand.get(hoveredHandIndex) : null;
@@ -712,7 +712,7 @@ public class GrimoireScreen extends Screen {
                 + (weatherFog ? "[ТУМАН:ДАЛ] " : "")
                 + (weatherRain ? "[СКРИП:ОСА] " : "")
                 + (!weatherFrost && !weatherFog && !weatherRain ? "ЯСНО" : "");
-        g.drawString(this.font, wLabel, x1 + 6, divY + 3, 0xFF90CAF9, false);
+        g.text(this.font, wLabel, x1 + 6, divY + 3, 0xFF90CAF9, false);
 
         // Player rows (Melee -> Ranged -> Siege)
         int pStart = divY + 15;
@@ -728,12 +728,12 @@ public class GrimoireScreen extends Screen {
         int hintY = pStart + (rowH + 1) * 3 + 2;
         g.fill(x1, hintY, x2, hintY + 13, 0xFF14181E);
         if (awaitingDecoyReturn) {
-            g.drawString(this.font, "ЧУЧЕЛО АКТИВНО: нажми на любую СВОЮ карту на поле выше, чтобы забрать её в руку!", x1 + 4, hintY + 3, 0xFFA5D6A7, false);
+            g.text(this.font, "ЧУЧЕЛО АКТИВНО: нажми на любую СВОЮ карту на поле выше, чтобы забрать её в руку!", x1 + 4, hintY + 3, 0xFFA5D6A7, false);
         } else if (hoveredCard != null) {
             String hStr = "[" + hoveredCard.row.badge + "] " + hoveredCard.name + " -> " + hoveredCard.row.hint + " | " + hoveredCard.desc;
-            g.drawString(this.font, trimToWidth(hStr, w - 8), x1 + 4, hintY + 3, 0xFFFFE082, false);
+            g.text(this.font, trimToWidth(hStr, w - 8), x1 + 4, hintY + 3, 0xFFFFE082, false);
         } else {
-            g.drawString(this.font, "Наведи на карту в руке для подсветки ряда • Клик по карте разыгрывает её", x1 + 4, hintY + 3, 0xFF78909C, false);
+            g.text(this.font, "Наведи на карту в руке для подсветки ряда • Клик по карте разыгрывает её", x1 + 4, hintY + 3, 0xFF78909C, false);
         }
 
         // Player Hand Cards at bottom
@@ -741,7 +741,7 @@ public class GrimoireScreen extends Screen {
         int cardH = Math.max(46, y2 - handY - 2);
         hoveredHandIndex = -1;
         if (playerHand.isEmpty()) {
-            g.drawString(this.font, "Рука пуста — нажми «ПАС» или «ЗАНОВО»", x1 + 10, handY + 16, 0xFF90A4AE, false);
+            g.text(this.font, "Рука пуста — нажми «ПАС» или «ЗАНОВО»", x1 + 10, handY + 16, 0xFF90A4AE, false);
             return;
         }
 
@@ -770,7 +770,7 @@ public class GrimoireScreen extends Screen {
 
         int rowSum = calcRowPower(cards, weathered);
         String prefix = label + " [" + rowSum + "]";
-        g.drawString(this.font, prefix, x + 4, y + 5, weathered ? 0xFF81D4FA : 0xFFB0BEC5, false);
+        g.text(this.font, prefix, x + 4, y + 5, weathered ? 0xFF81D4FA : 0xFFB0BEC5, false);
 
         int chipX = x + 76;
         for (int i = 0; i < cards.size(); i++) {
@@ -782,7 +782,7 @@ public class GrimoireScreen extends Screen {
             boolean hovChip = isPlayerSide && awaitingDecoyReturn && isInside(mouseX, mouseY, chipX, y + 2, cw, h - 4);
             g.fill(chipX, y + 2, chipX + cw, y + h - 2, hovChip ? 0xFF388E3C : (c.hero ? 0xFF3E2E12 : 0xFF1F2933));
             drawPixelBorder(g, chipX, y + 2, cw, h - 4, c.hero ? 0xFFFFD700 : c.row.color);
-            g.drawString(this.font, chip, chipX + 3, y + 5, c.hero ? 0xFFFFE082 : 0xFFFFFFFF, false);
+            g.text(this.font, chip, chipX + 3, y + 5, c.hero ? 0xFFFFE082 : 0xFFFFFFFF, false);
             chipX += cw + 3;
         }
     }
@@ -795,7 +795,7 @@ public class GrimoireScreen extends Screen {
         // Top row badge strip
         g.fill(x + 1, y + 1, x + w - 1, y + 11, c.row.color);
         String topBadge = (c.hero ? "★" : "") + c.power + " " + c.row.badge;
-        g.drawString(this.font, trimToWidth(topBadge, w - 4), x + 3, y + 2, 0xFF0A0C0E, false);
+        g.text(this.font, trimToWidth(topBadge, w - 4), x + 3, y + 2, 0xFF0A0C0E, false);
 
         // Center pixel emblem
         int iconCx = x + w / 2 - 6;
@@ -804,7 +804,7 @@ public class GrimoireScreen extends Screen {
 
         // Card short title at bottom
         String title = shortName(c.name, Math.max(5, w / 6));
-        g.drawString(this.font, title, x + 3, y + h - 10, c.hero ? 0xFFFFE082 : 0xFFE0E0E0, false);
+        g.text(this.font, title, x + 3, y + h - 10, c.hero ? 0xFFFFE082 : 0xFFE0E0E0, false);
     }
 
     // =========================================================================
@@ -816,13 +816,13 @@ public class GrimoireScreen extends Screen {
 
         g.fill(x1, y1, x2, y1 + 18, 0xFF141920);
         String hud = "СЧЁТ: " + snakeScore + " | РЕКОРД: " + state.getSnakeHighScore() + " | ДОБЫТО: +" + snakeEarnedEther + " ✦";
-        g.drawString(this.font, hud, x1 + 6, y1 + 5, 0xFF4DD0E1, false);
+        g.text(this.font, hud, x1 + 6, y1 + 5, 0xFF4DD0E1, false);
 
         int btnX = x2 - 68;
         boolean hov = isInside(mouseX, mouseY, btnX, y1 + 2, 64, 14);
         g.fill(btnX, y1 + 2, btnX + 64, y1 + 16, hov ? 0xFF00838F : 0xFF006064);
         drawPixelBorder(g, btnX, y1 + 2, 64, 14, 0xFF80DEEA);
-        g.drawString(this.font, "ЗАНОВО [R]", btnX + 5, y1 + 5, 0xFFFFFFFF, false);
+        g.text(this.font, "ЗАНОВО [R]", btnX + 5, y1 + 5, 0xFFFFFFFF, false);
 
         int cell = Math.min((w - 16) / SNAKE_W, (y2 - y1 - 34) / SNAKE_H);
         cell = Math.max(8, cell);
@@ -866,7 +866,7 @@ public class GrimoireScreen extends Screen {
             g.fill(px, py, px + cell - 2, py + cell - 2, col);
         }
 
-        g.drawString(this.font, "Управление: WASD или Стрелки • Бирюза = +10 ✦ • Золото = +30 ✦", x1 + 8, gy + gridH + 4, 0xFF90A4AE, false);
+        g.text(this.font, "Управление: WASD или Стрелки • Бирюза = +10 ✦ • Золото = +30 ✦", x1 + 8, gy + gridH + 4, 0xFF90A4AE, false);
     }
 
     // =========================================================================
@@ -879,9 +879,9 @@ public class GrimoireScreen extends Screen {
         // Banner box
         g.fill(x1, y1, x2, y1 + 48, 0xFF171324);
         drawPixelBorder(g, x1, y1, w, 48, 0xFFFFD700);
-        g.drawString(this.font, "★ АЛТАРЬ ПРИЗЫВА ДУШ: ЗОВ ПОВЕЛИТЕЛЯ ★", x1 + 10, y1 + 6, 0xFFFFD700, true);
-        g.drawString(this.font, "Гарант 5★ Героя каждые 10 круток! Прогресс гаранта: " + state.getPityCounter() + "/10", x1 + 10, y1 + 19, 0xFFCE93D8, false);
-        g.drawString(this.font, "Выбитые карты сразу открываются для «Хроник Пепла» (дубликаты возвращают Эфир).", x1 + 10, y1 + 32, 0xFFB0BEC5, false);
+        g.text(this.font, "★ АЛТАРЬ ПРИЗЫВА ДУШ: ЗОВ ПОВЕЛИТЕЛЯ ★", x1 + 10, y1 + 6, 0xFFFFD700, true);
+        g.text(this.font, "Гарант 5★ Героя каждые 10 круток! Прогресс гаранта: " + state.getPityCounter() + "/10", x1 + 10, y1 + 19, 0xFFCE93D8, false);
+        g.text(this.font, "Выбитые карты сразу открываются для «Хроник Пепла» (дубликаты возвращают Эфир).", x1 + 10, y1 + 32, 0xFFB0BEC5, false);
 
         // 1x and 10x Summon buttons
         int btnY = y1 + 54;
@@ -894,13 +894,13 @@ public class GrimoireScreen extends Screen {
         boolean hov1 = can1 && isInside(mouseX, mouseY, b1X, btnY, b1W, 22);
         g.fill(b1X, btnY, b1X + b1W, btnY + 22, can1 ? (hov1 ? 0xFF00838F : 0xFF006064) : 0xFF1C2226);
         drawPixelBorder(g, b1X, btnY, b1W, 22, can1 ? 0xFF4DD0E1 : 0xFF455A64);
-        g.drawString(this.font, "ПРИЗЫВ x1 (160 ✦)", b1X + 20, btnY + 7, can1 ? 0xFFFFFFFF : 0xFF78909C, false);
+        g.text(this.font, "ПРИЗЫВ x1 (160 ✦)", b1X + 20, btnY + 7, can1 ? 0xFFFFFFFF : 0xFF78909C, false);
 
         boolean can10 = state.getEther() >= 1600;
         boolean hov10 = can10 && isInside(mouseX, mouseY, b10X, btnY, b10W, 22);
         g.fill(b10X, btnY, b10X + b10W, btnY + 22, can10 ? (hov10 ? 0xFFFF8F00 : 0xFFE65100) : 0xFF1C2226);
         drawPixelBorder(g, b10X, btnY, b10W, 22, can10 ? 0xFFFFD700 : 0xFF455A64);
-        g.drawString(this.font, "ПРИЗЫВ x10 (1600 ✦)", b10X + 20, btnY + 7, can10 ? 0xFFFFFFFF : 0xFF78909C, false);
+        g.text(this.font, "ПРИЗЫВ x10 (1600 ✦)", b10X + 20, btnY + 7, can10 ? 0xFFFFFFFF : 0xFF78909C, false);
 
         // Results area
         int resY = btnY + 28;
@@ -908,8 +908,8 @@ public class GrimoireScreen extends Screen {
         drawPixelBorder(g, x1, resY, w, y2 - resY, 0xFF37474F);
 
         if (lastWishResults.isEmpty()) {
-            g.drawString(this.font, "Соверши призыв, чтобы призвать новых духов и героев в свою колоду!", x1 + 14, resY + 18, 0xFF90A4AE, false);
-            g.drawString(this.font, "Совет: Эфир пассивно добывается призванными фамильярами в мире и в мини-играх.", x1 + 14, resY + 34, 0xFF78909C, false);
+            g.text(this.font, "Соверши призыв, чтобы призвать новых духов и героев в свою колоду!", x1 + 14, resY + 18, 0xFF90A4AE, false);
+            g.text(this.font, "Совет: Эфир пассивно добывается призванными фамильярами в мире и в мини-играх.", x1 + 14, resY + 34, 0xFF78909C, false);
             return;
         }
 
@@ -929,10 +929,10 @@ public class GrimoireScreen extends Screen {
             drawPixelBorder(g, cx, cy, cw, ch, rCol);
 
             String stars = "★".repeat(wr.card.rarity);
-            g.drawString(this.font, stars, cx + 4, cy + 4, rCol, false);
-            g.drawString(this.font, trimToWidth(wr.card.name, cw - 6), cx + 4, cy + 16, 0xFFFFFFFF, false);
+            g.text(this.font, stars, cx + 4, cy + 4, rCol, false);
+            g.text(this.font, trimToWidth(wr.card.name, cw - 6), cx + 4, cy + 16, 0xFFFFFFFF, false);
             String badge = wr.isNew ? "НОВАЯ!" : ("+" + wr.shardRefund + " ✦");
-            g.drawString(this.font, badge, cx + 4, cy + 32, wr.isNew ? 0xFF69F0AE : 0xFF80DEEA, false);
+            g.text(this.font, badge, cx + 4, cy + 32, wr.isNew ? 0xFF69F0AE : 0xFF80DEEA, false);
         }
     }
 
@@ -946,13 +946,13 @@ public class GrimoireScreen extends Screen {
 
         g.fill(x1, y1, x2, y1 + 18, 0xFF141920);
         String header = "КОЛОДА: " + state.getActiveDeckIds().size() + "/12 карт | Открыто: " + state.getUnlockedIds().size() + "/" + all.size();
-        g.drawString(this.font, header, x1 + 6, y1 + 5, 0xFFFFE082, false);
+        g.text(this.font, header, x1 + 6, y1 + 5, 0xFFFFE082, false);
 
         int autoX = x2 - 96;
         boolean hovAuto = isInside(mouseX, mouseY, autoX, y1 + 2, 92, 14);
         g.fill(autoX, y1 + 2, autoX + 92, y1 + 16, hovAuto ? 0xFF2E7D32 : 0xFF1B5E20);
         drawPixelBorder(g, autoX, y1 + 2, 92, 14, 0xFF81C784);
-        g.drawString(this.font, "АВТО-СБОРКА", autoX + 10, y1 + 5, 0xFFFFFFFF, false);
+        g.text(this.font, "АВТО-СБОРКА", autoX + 10, y1 + 5, 0xFFFFFFFF, false);
 
         int listY = y1 + 22;
         int itemH = 18;
@@ -975,13 +975,13 @@ public class GrimoireScreen extends Screen {
 
             String statusTag = !unlocked ? "[ЗАКРЫТО]" : (inDeck ? "[В КОЛОДЕ]" : "[РЕЗЕРВ]");
             int tagCol = !unlocked ? 0xFF546E7A : (inDeck ? 0xFF69F0AE : 0xFF90A4AE);
-            g.drawString(this.font, statusTag, x1 + 4, ry + 4, tagCol, false);
+            g.text(this.font, statusTag, x1 + 4, ry + 4, tagCol, false);
 
             String line = "★".repeat(c.rarity) + " [" + c.row.badge + "|" + c.power + "] " + c.name + " — " + c.desc;
-            g.drawString(this.font, trimToWidth(line, w - 76), x1 + 72, ry + 4, unlocked ? 0xFFECEFF1 : 0xFF607D8B, false);
+            g.text(this.font, trimToWidth(line, w - 76), x1 + 72, ry + 4, unlocked ? 0xFFECEFF1 : 0xFF607D8B, false);
         }
 
-        g.drawString(this.font, "Клик по открытой карте добавляет/убирает её из колоды (8..14 карт) • Колёсико мыши: прокрутка", x1 + 4, y2 - 11, 0xFF78909C, false);
+        g.text(this.font, "Клик по открытой карте добавляет/убирает её из колоды (8..14 карт) • Колёсико мыши: прокрутка", x1 + 4, y2 - 11, 0xFF78909C, false);
     }
 
     // =========================================================================
@@ -995,8 +995,8 @@ public class GrimoireScreen extends Screen {
 
         g.fill(x1, y1, x2, y1 + 34, 0xFF121C22);
         drawPixelBorder(g, x1, y1, w, 34, 0xFF4DD0E1);
-        g.drawString(this.font, "ПАССИВНАЯ ДОБЫЧА ЭФИРА: +" + rate + " ✦/мин (призвано духов: " + activeCount + ")", x1 + 8, y1 + 6, 0xFF4DD0E1, false);
-        g.drawString(this.font, "Чем больше фамильяров в вашей свите (до 6), тем быстрее наполняется чаша Эфира!", x1 + 8, y1 + 19, 0xFFB0BEC5, false);
+        g.text(this.font, "ПАССИВНАЯ ДОБЫЧА ЭФИРА: +" + rate + " ✦/мин (призвано духов: " + activeCount + ")", x1 + 8, y1 + 6, 0xFF4DD0E1, false);
+        g.text(this.font, "Чем больше фамильяров в вашей свите (до 6), тем быстрее наполняется чаша Эфира!", x1 + 8, y1 + 19, 0xFFB0BEC5, false);
 
         int qY = y1 + 40;
         renderDailyRow(g, x1, qY, w, 34,
@@ -1019,8 +1019,8 @@ public class GrimoireScreen extends Screen {
         g.fill(x, y, x + w, y + h, claimed ? 0xFF101614 : 0xFF151B22);
         drawPixelBorder(g, x, y, w, h, ready ? 0xFFFFD700 : (claimed ? 0xFF2E7D32 : 0xFF37474F));
 
-        g.drawString(this.font, title, x + 8, y + 6, 0xFFFFFFFF, false);
-        g.drawString(this.font, sub, x + 8, y + 19, 0xFF90A4AE, false);
+        g.text(this.font, title, x + 8, y + 6, 0xFFFFFFFF, false);
+        g.text(this.font, sub, x + 8, y + 19, 0xFF90A4AE, false);
 
         int bx = x + w - 96;
         int by = y + 8;
@@ -1029,7 +1029,7 @@ public class GrimoireScreen extends Screen {
         g.fill(bx, by, bx + 88, by + 18, bBg);
         drawPixelBorder(g, bx, by, 88, 18, ready ? 0xFFFFD700 : 0xFF455A64);
         String bLbl = claimed ? "ПОЛУЧЕНО" : (ready ? "ЗАБРАТЬ +" + reward + "✦" : "+" + reward + " ✦");
-        g.drawString(this.font, bLbl, bx + 8, by + 5, ready ? 0xFFFFFFFF : 0xFF78909C, false);
+        g.text(this.font, bLbl, bx + 8, by + 5, ready ? 0xFFFFFFFF : 0xFF78909C, false);
     }
 
 
@@ -1039,7 +1039,7 @@ public class GrimoireScreen extends Screen {
     private void renderCommandsTab(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2) {
         int w = x2 - x1;
         g.fill(x1, y1, x2, y1 + 18, 0xFF141920);
-        g.drawString(this.font, "СВИТОК КОМАНД ФАМИЛЬЯРОВ (" + FAMILIAR_COMMANDS.length + " приказов) • Колёсико: прокрутка", x1 + 6, y1 + 5, 0xFFFFE082, false);
+        g.text(this.font, "СВИТОК КОМАНД ФАМИЛЬЯРОВ (" + FAMILIAR_COMMANDS.length + " приказов) • Колёсико: прокрутка", x1 + 6, y1 + 5, 0xFFFFE082, false);
 
         int listY = y1 + 21;
         int itemH = 19;
@@ -1059,15 +1059,15 @@ public class GrimoireScreen extends Screen {
             String cmd = entry[0];
             String desc = entry[1];
             int cmdCol = cmd.startsWith(".f") ? 0xFFCE93D8 : 0xFF4DD0E1;
-            g.drawString(this.font, cmd, x1 + 5, ry + 4, cmdCol, false);
+            g.text(this.font, cmd, x1 + 5, ry + 4, cmdCol, false);
             int cmdW = this.font.width(cmd) + 12;
             if (cmdW < w - 20) {
-                g.drawString(this.font, "— " + trimToWidth(desc, w - cmdW - 14), x1 + cmdW, ry + 4, 0xFFCFD8DC, false);
+                g.text(this.font, "— " + trimToWidth(desc, w - cmdW - 14), x1 + cmdW, ry + 4, 0xFFCFD8DC, false);
             }
         }
 
         String scrollInfo = "Показаны " + (commandScrollRow + 1) + "-" + Math.min(FAMILIAR_COMMANDS.length, commandScrollRow + maxRows) + " из " + FAMILIAR_COMMANDS.length + " • Можно обращаться по имени или «Все, ...»";
-        g.drawString(this.font, scrollInfo, x1 + 5, y2 - 10, 0xFF78909C, false);
+        g.text(this.font, scrollInfo, x1 + 5, y2 - 10, 0xFF78909C, false);
     }
 
     // =========================================================================
