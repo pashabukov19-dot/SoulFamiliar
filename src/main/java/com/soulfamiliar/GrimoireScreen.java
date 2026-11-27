@@ -1078,12 +1078,50 @@ public class GrimoireScreen extends Screen {
     // =========================================================================
     // INPUT HANDLING
     // =========================================================================
+    private int lastHandledClickTick = -1;
+
+    private double normalizeMouseX(double rawX) {
+        if (rawX > this.width && this.minecraft != null) {
+            double scale = this.minecraft.getWindow().getGuiScale();
+            if (scale > 0) return rawX / scale;
+        }
+        return rawX;
+    }
+
+    private double normalizeMouseY(double rawY) {
+        if (rawY > this.height && this.minecraft != null) {
+            double scale = this.minecraft.getWindow().getGuiScale();
+            if (scale > 0) return rawY / scale;
+        }
+        return rawY;
+    }
+
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        double mouseX = event.x();
-        double mouseY = event.y();
-        int button = event.button();
-        if (button != 0) return super.mouseClicked(event, doubleClick);
+        if (event.button() != 0) return super.mouseClicked(event, doubleClick);
+        double mouseX = normalizeMouseX(event.x());
+        double mouseY = normalizeMouseY(event.y());
+        if (handlePrimaryClick(mouseX, mouseY)) {
+            lastHandledClickTick = animTicks;
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && lastHandledClickTick != animTicks) {
+            double mouseX = normalizeMouseX(event.x());
+            double mouseY = normalizeMouseY(event.y());
+            if (handlePrimaryClick(mouseX, mouseY)) {
+                lastHandledClickTick = animTicks;
+                return true;
+            }
+        }
+        return super.mouseReleased(event);
+    }
+
+    private boolean handlePrimaryClick(double mouseX, double mouseY) {
 
         int boxW = Math.min(460, this.width - 16);
         int boxH = Math.min(312, this.height - 14);
@@ -1249,7 +1287,7 @@ public class GrimoireScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(event, doubleClick);
+        return false;
     }
 
     @Override
@@ -1278,6 +1316,16 @@ public class GrimoireScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
+        // Number keys 1..6 switch Grimoire tabs
+        if (key >= 49 && key <= 54) {
+            Tab[] tabs = Tab.values();
+            int idx = key - 49;
+            if (idx < tabs.length) {
+                currentTab = tabs[idx];
+                playRetroSound(1.1f);
+                return true;
+            }
+        }
         if (currentTab == Tab.ETHER_SNAKE) {
             // Up: W (87) or UP (265)
             if ((key == 87 || key == 265) && snakeDirY != 1) {
