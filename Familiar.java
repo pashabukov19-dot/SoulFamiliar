@@ -38,6 +38,8 @@ public class Familiar {
 
     private boolean roamEnabled = true;
     private Vec3 roamGoal = null;
+    private Vec3 goToDestination = null;
+    private int goToTimeoutTicks = 0;
     private int roamPauseTicks = 0;
     private int standFreeWillActionTimer = 0;
     private PoseState standFreeWillPose = null;
@@ -88,6 +90,18 @@ public class Familiar {
 
     public boolean isBound() {
         return boundStandUuid != null;
+    }
+
+    public void triggerGoTo(Vec3 destination) {
+        if (destination == null) return;
+        this.goToDestination = destination;
+        this.goToTimeoutTicks = 260;
+        this.mode = FamiliarMode.GO_TO;
+        this.roamGoal = null;
+        this.standFreeWillActionTimer = 0;
+        this.standFreeWillPose = null;
+        this.inspectFocusPos = destination.add(0, 0.6, 0);
+        this.inspectTicksLeft = 220;
     }
 
     public void setRoamEnabled(boolean enabled) {
@@ -361,15 +375,10 @@ public class Familiar {
                     desired = PoseState.bow(yawBetween(standPos, player.position()));
                 } else if (roamEnabled) {
                     // Stand free-will: autonomous walks + characterful pauses & gestures
-                    if (roamGoal == null || roamGoal.distanceTo(player.position()) > 19.5) {
-                        if (roamPauseTicks <= 0) {
-                            roamPauseTicks = switch (mood) {
-                                case MISCHIEVOUS -> 25 + rng.nextInt(35);
-                                case MELANCHOLIC -> 55 + rng.nextInt(70);
-                                default -> 35 + rng.nextInt(55);
-                            };
+                    if (roamGoal == null || roamGoal.distanceTo(player.position()) > 21.0) {
+                        if (roamPauseTicks > 0) {
+                            roamPauseTicks--;
                         }
-                        roamPauseTicks--;
 
                         if (roamPauseTicks <= 0) {
                             roamGoal = WorldScout.pickInterestingRoamTarget(level, player, standPos);
@@ -402,7 +411,7 @@ public class Familiar {
                         double horizDist = Math.hypot(diff.x, diff.z);
                         if (horizDist > 0.32 || Math.abs(diff.y) > 0.35) {
                             float walkYaw = yawBetween(standPos, roamGoal);
-                            double speed = (mood == FamiliarMood.MISCHIEVOUS) ? 0.16 : (mood == FamiliarMood.MELANCHOLIC ? 0.09 : 0.12);
+                            double speed = (mood == FamiliarMood.MISCHIEVOUS) ? 0.20 : (mood == FamiliarMood.MELANCHOLIC ? 0.13 : 0.16);
                             double stepX = Mth.clamp(diff.x * 0.22, -speed, speed);
                             double stepZ = Mth.clamp(diff.z * 0.22, -speed, speed);
                             double stepY = Mth.clamp(diff.y * 0.18, -0.10, 0.10);
@@ -447,16 +456,45 @@ public class Familiar {
                     desired = PoseState.guard(currentPose.bodyYaw, 0.0f, scanYaw - currentPose.bodyYaw, tickCount);
                 }
             }
-            case FOLLOW -> {
-                float rad = (player.getYRot() + 55.0f + groupIndex * 32.0f) * Mth.DEG_TO_RAD;
-                Vec3 desiredPos = player.position().add(-Mth.sin(rad) * 1.5, 0.45 + Math.sin(tickCount * 0.1) * 0.12, Mth.cos(rad) * 1.5);
-                Vec3 diff = desiredPos.subtract(standPos);
-                if (diff.length() > 0.12) {
-                    moveDelta = diff.scale(0.28);
+            case GO_TO -> {
+                if (goToDestination == null || --goToTimeoutTicks <= 0) {
+                    goToDestination = null;
+                    mode = FamiliarMode.IDLE;
+                    break;
                 }
-                desired = PoseState.idle(player.getYRot(), tickCount);
-                desired.leftLegX = 14.0f;
-                desired.rightLegX = 22.0f;
+                Vec3 diff = goToDestination.subtract(standPos);
+                double horizDist = Math.hypot(diff.x, diff.z);
+                float yawToGoal = yawBetween(standPos, goToDestination);
+                if (horizDist > 0.95 || Math.abs(diff.y) > 0.85) {
+                    double stepX = Mth.clamp(diff.x * 0.26, -0.22, 0.22);
+                    double stepZ = Mth.clamp(diff.z * 0.26, -0.22, 0.22);
+                    double stepY = Mth.clamp(diff.y * 0.22, -0.15, 0.15);
+                    moveDelta = new Vec3(stepX, stepY, stepZ);
+                    desired = PoseState.march(yawToGoal, tickCount * 0.85f, true);
+                } else {
+                    goToDestination = null;
+                    roamPauseTicks = 60;
+                    mode = FamiliarMode.IDLE;
+                    desired = PoseState.point(yawToGoal, 15.0f);
+                }
+            }
+            case FOLLOW -> {
+                float rad = (player.getYRot() + 55.0f + groupIndex * 36.0f) * Mth.DEG_TO_RAD;
+                double escortDist = 2.6 + groupIndex * 0.55;
+                Vec3 desiredPos = player.position().add(-Mth.sin(rad) * escortDist, 0.0, Mth.cos(rad) * escortDist);
+                Vec3 diff = desiredPos.subtract(standPos);
+                double horizDist = Math.hypot(diff.x, diff.z);
+                float walkYaw = yawBetween(standPos, desiredPos);
+                if (horizDist > 0.75 || Math.abs(diff.y) > 0.65) {
+                    double maxStep = 0.11;
+                    double stepX = Mth.clamp(diff.x * 0.14, -maxStep, maxStep);
+                    double stepZ = Mth.clamp(diff.z * 0.14, -maxStep, maxStep);
+                    double stepY = Mth.clamp(diff.y * 0.12, -0.07, 0.07);
+                    moveDelta = new Vec3(stepX, stepY, stepZ);
+                    desired = PoseState.march(walkYaw, tickCount * 0.65f, true);
+                } else {
+                    desired = PoseState.idle(yawBetween(standPos, player.position()), tickCount);
+                }
             }
             case KNEEL -> desired = PoseState.kneel(yawBetween(standPos, player.position()));
             case MEDITATE -> {
@@ -607,6 +645,7 @@ public class Familiar {
             boolean needsMoveFlags = !initializedFlags
                     || (mode == FamiliarMode.IDLE && roamEnabled)
                     || mode == FamiliarMode.FOLLOW
+                    || mode == FamiliarMode.GO_TO
                     || mode == FamiliarMode.SCARE
                     || mode == FamiliarMode.POSSESSED
                     || mode == FamiliarMode.MEDITATE
@@ -650,6 +689,16 @@ public class Familiar {
             targetYaw = (tickCount * 3.5f) % 360.0f;
             targetPitch = 15.0f;
             moveLerp = 0.055;
+        } else if (mode == FamiliarMode.GO_TO && goToDestination != null) {
+            if (--goToTimeoutTicks <= 0) {
+                goToDestination = null;
+                mode = FamiliarMode.IDLE;
+            } else {
+                targetPos = goToDestination.add(0, 0.85 + Math.sin(tickCount * 0.10) * 0.12, 0);
+                targetYaw = yawBetween(currentSkullPos, goToDestination);
+                targetPitch = 18.0f;
+                moveLerp = 0.045;
+            }
         } else if (inspectTicksLeft > 0 && inspectFocusPos != null) {
             inspectTicksLeft--;
             if (inspectFocusPos.distanceToSqr(player.position()) <= 625.0) {
