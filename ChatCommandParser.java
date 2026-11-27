@@ -277,7 +277,7 @@ public final class ChatCommandParser {
             return;
         }
 
-        if (lower.contains("погуляй") || lower.contains("изучай") || lower.contains("исследуй") || lower.contains("свободно")) {
+        if ((lower.contains("погуляй") || lower.equals("гуляй") || lower.contains(" гуляй") || lower.startsWith("гуляй")) || lower.contains("изучай") || lower.contains("исследуй") || lower.contains("свободно")) {
             for (Familiar f : targets) {
                 f.setRoamEnabled(true);
                 f.setMode(FamiliarMode.IDLE);
