@@ -12,8 +12,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
-import org.lwjgl.glfw.GLFW;
-
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -579,22 +577,46 @@ public class GrimoireScreen extends Screen {
     private int lastRenderMouseY = -1;
     private boolean wasLeftMouseDown = false;
 
+    private boolean isLeftMouseDownSafe() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return false;
+        try {
+            Object handler = null;
+            for (java.lang.reflect.Field f : Minecraft.class.getDeclaredFields()) {
+                if (f.getType().getSimpleName().toLowerCase(java.util.Locale.ROOT).contains("mouse")) {
+                    f.setAccessible(true);
+                    handler = f.get(mc);
+                    break;
+                }
+            }
+            if (handler != null) {
+                for (java.lang.reflect.Method m : handler.getClass().getDeclaredMethods()) {
+                    if (m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                        String n = m.getName().toLowerCase(java.util.Locale.ROOT);
+                        if (n.contains("left") && (n.contains("press") || n.contains("down"))) {
+                            m.setAccessible(true);
+                            return (Boolean) m.invoke(handler);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         this.lastRenderMouseX = mouseX;
         this.lastRenderMouseY = mouseY;
 
-        // Direct GLFW rising-edge click fallback using exact render-space mouseX/mouseY
-        long win = GLFW.glfwGetCurrentContext();
-        if (win != 0L) {
-            boolean down = GLFW.glfwGetMouseButton(win, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-            if (down && !wasLeftMouseDown && lastHandledClickTick != animTicks) {
-                if (handlePrimaryClick(mouseX, mouseY)) {
-                    lastHandledClickTick = animTicks;
-                }
+        // Direct MouseHandler rising-edge click fallback using exact render-space mouseX/mouseY
+        boolean down = isLeftMouseDownSafe();
+        if (down && !wasLeftMouseDown && lastHandledClickTick != animTicks) {
+            if (handlePrimaryClick(mouseX, mouseY)) {
+                lastHandledClickTick = animTicks;
             }
-            wasLeftMouseDown = down;
         }
+        wasLeftMouseDown = down;
 
         // Dark vignette backdrop
         g.fill(0, 0, this.width, this.height, 0xCC06070A);
