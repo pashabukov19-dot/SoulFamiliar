@@ -3,6 +3,7 @@ package com.soulfamiliar;
 import com.soulfamiliar.GrimoireState.CardDef;
 import com.soulfamiliar.GrimoireState.CardRow;
 import com.soulfamiliar.GrimoireState.WishResult;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -1141,7 +1142,7 @@ public class GrimoireScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() != 0) return super.mouseClicked(event, doubleClick);
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) return super.mouseClicked(event, doubleClick);
         if (lastHandledClickTick == animTicks) return true;
         double mouseX = lastRenderMouseX >= 0 ? lastRenderMouseX : normalizeMouseX(event.x());
         double mouseY = lastRenderMouseY >= 0 ? lastRenderMouseY : normalizeMouseY(event.y());
@@ -1154,7 +1155,7 @@ public class GrimoireScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (event.button() == 0 && lastHandledClickTick != animTicks) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && lastHandledClickTick != animTicks) {
             double mouseX = normalizeMouseX(event.x());
             double mouseY = normalizeMouseY(event.y());
             if (handlePrimaryClick(mouseX, mouseY)) {
@@ -1360,39 +1361,38 @@ public class GrimoireScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
-        // Number keys 1..6 switch Grimoire tabs
-        if (key >= 49 && key <= 54) {
-            Tab[] tabs = Tab.values();
-            int idx = key - 49;
-            if (idx < tabs.length) {
-                currentTab = tabs[idx];
-                playRetroSound(1.1f);
-                return true;
-            }
+        // Number keys 1..6 switch Grimoire tabs (using Minecraft 26.3 InputConstants)
+        Tab[] tabs = Tab.values();
+        int tabIdx = -1;
+        if (key == InputConstants.KEY_1) tabIdx = 0;
+        else if (key == InputConstants.KEY_2) tabIdx = 1;
+        else if (key == InputConstants.KEY_3) tabIdx = 2;
+        else if (key == InputConstants.KEY_4) tabIdx = 3;
+        else if (key == InputConstants.KEY_5) tabIdx = 4;
+        else if (key == InputConstants.KEY_6) tabIdx = 5;
+        if (tabIdx >= 0 && tabIdx < tabs.length) {
+            currentTab = tabs[tabIdx];
+            playRetroSound(1.1f);
+            return true;
         }
         if (currentTab == Tab.ETHER_SNAKE) {
-            // Up: W (87) or UP (265)
-            if ((key == 87 || key == 265) && snakeDirY != 1) {
+            if ((key == InputConstants.KEY_W || key == InputConstants.KEY_UP) && snakeDirY != 1) {
                 nextDirX = 0; nextDirY = -1;
                 return true;
             }
-            // Down: S (83) or DOWN (264)
-            if ((key == 83 || key == 264) && snakeDirY != -1) {
+            if ((key == InputConstants.KEY_S || key == InputConstants.KEY_DOWN) && snakeDirY != -1) {
                 nextDirX = 0; nextDirY = 1;
                 return true;
             }
-            // Left: A (65) or LEFT (263)
-            if ((key == 65 || key == 263) && snakeDirX != 1) {
+            if ((key == InputConstants.KEY_A || key == InputConstants.KEY_LEFT) && snakeDirX != 1) {
                 nextDirX = -1; nextDirY = 0;
                 return true;
             }
-            // Right: D (68) or RIGHT (262)
-            if ((key == 68 || key == 262) && snakeDirX != -1) {
+            if ((key == InputConstants.KEY_D || key == InputConstants.KEY_RIGHT) && snakeDirX != -1) {
                 nextDirX = 1; nextDirY = 0;
                 return true;
             }
-            // R (82) restart
-            if (key == 82) {
+            if (key == InputConstants.KEY_R) {
                 resetSnake();
                 return true;
             }
