@@ -12,6 +12,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
+import org.lwjgl.glfw.GLFW;
+
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -573,8 +575,27 @@ public class GrimoireScreen extends Screen {
         // Custom dark CRT backdrop is drawn in extractRenderState; skip vanilla blur to avoid "Can only blur once per frame"
     }
 
+    private int lastRenderMouseX = -1;
+    private int lastRenderMouseY = -1;
+    private boolean wasLeftMouseDown = false;
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        this.lastRenderMouseX = mouseX;
+        this.lastRenderMouseY = mouseY;
+
+        // Direct GLFW rising-edge click fallback using exact render-space mouseX/mouseY
+        long win = GLFW.glfwGetCurrentContext();
+        if (win != 0L) {
+            boolean down = GLFW.glfwGetMouseButton(win, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+            if (down && !wasLeftMouseDown && lastHandledClickTick != animTicks) {
+                if (handlePrimaryClick(mouseX, mouseY)) {
+                    lastHandledClickTick = animTicks;
+                }
+            }
+            wasLeftMouseDown = down;
+        }
+
         // Dark vignette backdrop
         g.fill(0, 0, this.width, this.height, 0xCC06070A);
 
@@ -1099,8 +1120,9 @@ public class GrimoireScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.button() != 0) return super.mouseClicked(event, doubleClick);
-        double mouseX = normalizeMouseX(event.x());
-        double mouseY = normalizeMouseY(event.y());
+        if (lastHandledClickTick == animTicks) return true;
+        double mouseX = lastRenderMouseX >= 0 ? lastRenderMouseX : normalizeMouseX(event.x());
+        double mouseY = lastRenderMouseY >= 0 ? lastRenderMouseY : normalizeMouseY(event.y());
         if (handlePrimaryClick(mouseX, mouseY)) {
             lastHandledClickTick = animTicks;
             return true;
