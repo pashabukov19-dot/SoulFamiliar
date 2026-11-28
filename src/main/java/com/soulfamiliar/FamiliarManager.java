@@ -65,14 +65,38 @@ public class FamiliarManager {
 
     public static void openScreen(Minecraft client, Screen screen) {
         if (client == null) return;
+        java.lang.reflect.Method preferred = null;
+        java.lang.reflect.Method fallback = null;
         for (java.lang.reflect.Method m : Minecraft.class.getDeclaredMethods()) {
-            if (m.getParameterCount() == 1 && m.getParameterTypes()[0] == Screen.class && m.getReturnType() == void.class) {
-                try {
-                    m.setAccessible(true);
-                    m.invoke(client, screen);
-                    return;
-                } catch (Throwable ignored) {}
+            if (m.getParameterCount() != 1 || m.getParameterTypes()[0] != Screen.class || m.getReturnType() != void.class) {
+                continue;
             }
+            String name = m.getName().toLowerCase(Locale.ROOT);
+            // NEVER call disconnect/clear/unload/level/world methods that kick the player out of the world!
+            if (name.contains("disconnect") || name.contains("clear") || name.contains("unload")
+                    || name.contains("level") || name.contains("world") || name.contains("exit")
+                    || name.contains("quit") || name.contains("stop") || name.contains("close")
+                    || name.contains("crash") || name.contains("save") || name.contains("pause")
+                    || name.contains("server") || name.contains("client")) {
+                continue;
+            }
+            if (name.equals("setscreen") || name.equals("openscreen") || name.equals("showscreen")
+                    || name.equals("setcurrentscreen") || name.equals("displayscreen")) {
+                preferred = m;
+                break;
+            }
+            if (name.contains("screen") && (name.startsWith("set") || name.startsWith("open") || name.startsWith("show"))) {
+                preferred = m;
+            } else if (fallback == null) {
+                fallback = m;
+            }
+        }
+        java.lang.reflect.Method target = preferred != null ? preferred : fallback;
+        if (target != null) {
+            try {
+                target.setAccessible(true);
+                target.invoke(client, screen);
+            } catch (Throwable ignored) {}
         }
     }
 
